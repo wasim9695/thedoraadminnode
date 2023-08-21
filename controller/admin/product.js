@@ -675,24 +675,28 @@ async getNewArrivals() {
       let selectQuery;
       if (data) {
       selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.newArrival=1
       GROUP BY p._id;
     `;
   } else {
     // Fetch products with pagination and search filtering
     selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.newArrival=1
       GROUP BY p._id;
     `;
@@ -707,6 +711,7 @@ async getNewArrivals() {
             const productsWithAttributes = result.map((data) => {
               const product = {
                 categoryIds: JSON.parse(`${data.categories}`),
+                ratingsCount: JSON.parse(`${data.reviews}`),
                 _id: data._id,
                 name: data.name,
                 minPurchaseQty: data.minPurchaseQty,
@@ -773,24 +778,28 @@ async getNewArrivals() {
       let selectQuery;
       if (data) {
       selectQuery = `
-      SELECT p.*, 
+        SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.bestSeller=1
       GROUP BY p._id;
     `;
   } else {
     // Fetch products with pagination and search filtering
     selectQuery = `
-      SELECT p.*, 
+        SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.bestSeller=1
       GROUP BY p._id;
     `;
@@ -804,8 +813,9 @@ async getNewArrivals() {
             const totalRecords = result.length;
             const productsWithAttributes = result.map((data) => {
               const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                 name: data._id,
+                 categoryIds: JSON.parse(`${data.categories}`),
+                ratingsCount: JSON.parse(`${data.reviews}`),
+                 name: data.name,
                _id: data._id,
                 minPurchaseQty: data.minPurchaseQty,
                 maxPurchaseQty: data.maxPurchaseQty,
@@ -869,24 +879,28 @@ async getFeatured() {
       let selectQuery;
       if (data) {
       selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.featured=1
       GROUP BY p._id;
     `;
   } else {
     // Fetch products with pagination and search filtering
     selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.featured=1
       GROUP BY p._id;
     `;
@@ -901,6 +915,7 @@ async getFeatured() {
             const productsWithAttributes = result.map((data) => {
               const product = {
                 categoryIds: JSON.parse(`${data.categories}`),
+                ratingsCount: JSON.parse(`${data.reviews}`),
                 name: data.name,
                  _id: data._id,
                 minPurchaseQty: data.minPurchaseQty,
@@ -966,24 +981,28 @@ async getTodayDeal() {
       let selectQuery;
       if (data) {
       selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.todaysDeal=1
       GROUP BY p._id;
     `;
   } else {
     // Fetch products with pagination and search filtering
     selectQuery = `
-      SELECT p.*, 
+       SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.todaysDeal=1
       GROUP BY p._id;
     `;
@@ -998,6 +1017,7 @@ async getTodayDeal() {
             const productsWithAttributes = result.map((data) => {
               const product = {
                 categoryIds: JSON.parse(`${data.categories}`),
+                 ratingsCount: JSON.parse(`${data.reviews}`),
                 name: data.name,
                  _id: data._id,
                 minPurchaseQty: data.minPurchaseQty,
@@ -1062,24 +1082,28 @@ async getTodayDeal() {
       let selectQuery;
       if (data) {
       selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.festiveOffers=1
       GROUP BY p._id;
     `;
   } else {
     // Fetch products with pagination and search filtering
     selectQuery = `
-      SELECT p.*, 
+      SELECT p.*, count(r.rating) as ratings,
       GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
+      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
+      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
       FROM products AS p
       LEFT JOIN productsattr AS a ON p.attributes = a._id
       LEFT JOIN categories AS c ON p.categoryIds = c._id
+      LEFT JOIN reviews AS r ON p._id = r.productId
       WHERE p.festiveOffers=1
       GROUP BY p._id;
     `;
@@ -1094,6 +1118,7 @@ async getTodayDeal() {
             const productsWithAttributes = result.map((data) => {
               const product = {
                 categoryIds: JSON.parse(`${data.categories}`),
+                ratingsCount: JSON.parse(`${data.reviews}`),
                 name: data.name,
                  _id: data._id,
                 minPurchaseQty: data.minPurchaseQty,
@@ -1770,6 +1795,11 @@ async getTodayDeal() {
       return this.res.send({ status: 0, message: "Internal Server Error" });
     }
   }
+
+
+ 
+
+
 
 }
 module.exports = ProductsController;

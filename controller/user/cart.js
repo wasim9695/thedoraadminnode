@@ -130,6 +130,46 @@ const gstStages = [
       throw error;
     }
   }
+
+
+
+  async function bulkUpdateCartItemSignle(cartItems, userId) {
+    try {
+      const updatePromises = [];
+      console.log(cartItems, userId);
+  
+      for (const cartItem of cartItems) {
+        // Check if the cart item already exists
+        // const cartItemExists = await getCartItem(cartItem.userId, cartItem.productId);
+  
+    //    console.log(cartItem, userId);
+  
+        // If the cart item exists, update its quantity
+        const updatePromise = new Promise((resolve, reject) => {
+          const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND _id = ?';
+
+        
+          connection.query(updateQuery, [cartItem.quantity, userId, cartItem._id], (err, results) => {
+            console.log(updateQuery);
+            if (err) {
+              reject(err);
+            } else {
+                console.log(results);
+              resolve(results);
+            }
+          });
+        });
+  
+        updatePromises.push(updatePromise);
+      }
+  
+      // Wait for all update promises to resolve
+      const updateResults = await Promise.all(updatePromises);
+      return updateResults;
+    } catch (error) {
+      throw error;
+    }
+  }
   
   // Function to get the cart total
   async function getCartTotal(userId) {
@@ -275,6 +315,60 @@ class CartController extends Controller {
       
             
                 await bulkUpdateCartItem(dataArray, userId);
+           
+          
+      
+          // Execute all the bulk updates
+        //   await Promise.all(bulkUpdates);
+      
+          // Get cart total and quantity after the bulk updates
+          const cartTotal = await getCartTotal(userId);
+          const cartQuantity = await getCartQuantity(userId);
+      
+          return this.res.send({ status: 1, message: 'Bulk cart update successful', data: { cartTotal, cartQuantity, insertedProductIds } });
+        } catch (error) {
+          console.error('Error:', error);
+          return this.res.send({ status: 0, message: 'Internal server error' });
+        }
+      }
+
+
+
+      async  updateAddToCartSingle() {
+        try {
+          const userId = this.req.user;
+          const dataArray = this.req.body;
+          // Check if the dataArray is an array
+          if (!Array.isArray(dataArray) || dataArray.length === 0) {
+            return this.res.send({ status: 0, message: "Please send a valid array of cart items" });
+          }
+      
+          const fieldsArray = ["productId", "quantity", "_id"];
+      
+          // Iterate through the dataArray and validate each cart item
+          for (const data of dataArray) {
+            const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
+            if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
+              return this.res.send({ status: 0, message: "Please send " + emptyFields.join(", ") + " fields required for each cart item." });
+            }
+      
+            const productDetails = await getProductDetails(data.productId);
+            if (!productDetails) {
+              return this.res.send({ status: 0, message: 'Product details not found for one of the cart items.' });
+            }
+          }
+      
+          const bulkUpdates = [];
+          const insertedProductIds = [];
+      
+          // Prepare the bulk updates
+         
+                
+      
+            // const cartItemExists = await getCartItem(userId, dataArray.productId);
+      
+            
+                await bulkUpdateCartItemSignle(dataArray, userId);
            
           
       

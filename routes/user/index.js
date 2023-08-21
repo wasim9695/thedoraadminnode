@@ -20,6 +20,27 @@ module.exports = (router, app) => {
     },
   );
 
+
+ router.get(
+    "/getuserAddr",
+    Authorization.isAuthorised,
+    (req, res, next) => {
+      const userObj = new UsersController().boot(req, res);
+      return userObj.getUserAddresses();
+    },
+  );
+
+  router.put(
+    "/updateuserAddrD/:addressId",
+    Authorization.isAuthorised,
+    (req, res, next) => {
+      const userObj = new UsersController().boot(req, res);
+      return userObj.userAddressesUpdateDefault();
+    },
+  );
+
+
+
   router.post(
     "/editUserProfile",
     Authorization.isAuthorised,
@@ -64,6 +85,24 @@ module.exports = (router, app) => {
     const authObj = new UsersController().boot(req, res);
     return authObj.userPassowrdChanage();
   });
+
+
+  router.post(
+    "/addreviews",
+    Authorization.isAuthorised,
+    (req, res, next) => {
+      const userObj = new UsersController().boot(req, res);
+      return userObj.addReview();
+    },
+  );
+
+   router.get(
+    "/getreviews",
+    (req, res, next) => {
+      const userObj = new UsersController().boot(req, res);
+      return userObj.getReview();
+    },
+  );
  
 
 

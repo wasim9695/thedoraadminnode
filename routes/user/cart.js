@@ -11,6 +11,10 @@ module.exports = (router, app) => {
         const cartObj = (new CartController()).boot(req, res);
         return cartObj.updateAddToCart();
     });
+    router.post('/singleupdate', Authorization.isAuthorised, (req, res, next) => {
+        const cartObj = (new CartController()).boot(req, res);
+        return cartObj.updateAddToCartSingle();
+    });
 
     router.post('/saveForLater', Authorization.isAuthorised, (req, res, next) => {
         const cartObj = (new CartController()).boot(req, res);

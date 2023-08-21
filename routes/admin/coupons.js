@@ -22,7 +22,7 @@ module.exports = (router, app) => {
         return couponObj.deleteCoupons();
     });
 
-    router.post('/admin/couponsListing', Authorization.isAdminAuthorised, (req, res, next) => {
+    router.get('/admin/couponsListing', Authorization.isAdminAuthorised, (req, res, next) => {
         const couponObj = (new CouponsController()).boot(req, res);
         return couponObj.couponsListing();
     });

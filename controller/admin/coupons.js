@@ -1,11 +1,13 @@
 const _ = require("lodash");
 
 const Controller = require("../base");
-const { Coupons } = require('../../models/s_coupons');
-const Model = require("../../utilities/model");
 const RequestBody = require("../../utilities/requestBody");
+const Authentication = require("../auth");
 const CommonService = require("../../utilities/common");
-const DownloadsController = require('../common/downloads');
+const Model = require("../../utilities/model");
+const Services = require("../../utilities/index");
+const connection = require("../../config/db");
+// const DownloadsController = require('../../common/downloads');
 
 
 class CouponsController extends Controller {
@@ -33,31 +35,65 @@ class CouponsController extends Controller {
       }               
       Return: JSON String
   ********************************************************/
-    async addAndUpdateCoupon() {
-        try {
-            let data = this.req.body;
-            const fieldsArray = ["type", "userLimit", "minShoppingAmount", "maxShoppingAmount", "startDate", "endDate", "discount", "discountType"];
-            const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
-            if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-                return this.res.send({ status: 0, message: "Please send" + " " + emptyFields.toString() + " fields required." });
-            }
-            if (data.couponId) {
-                await Coupons.findByIdAndUpdate(data.couponId, data, { new: true, upsert: true });
-                return this.res.send({ status: 1, message: "Coupon details updated successfully" });
-            } else {
-                data['couponCode'] = await this.commonService.randomGenerator(8, 'capital')
-                const newCoupon = await new Model(Coupons).store(data);
-                if (_.isEmpty(newCoupon)) {
-                    return this.res.send({ status: 0, message: "Coupon details not saved" })
-                }
-                return this.res.send({ status: 1, message: "Coupon details added successfully" });
-            }
-        }
-        catch (error) {
-            console.log("error- ", error);
-            this.res.send({ status: 0, message: error });
-        }
+   async addAndUpdateCoupon() {
+    try {
+      let data = this.req.body;
+      const fieldsArray = ["type", "userLimit", "minShoppingAmount", "maxShoppingAmount", "startDate", "endDate", "discount", "discountType"];
+      const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
+
+      if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
+        return this.res.send({ status: 0, message: "Please send" + " " + emptyFields.toString() + " fields required." });
+      }
+
+      if (data.couponId) {
+        // Assuming you have a table named 'Coupons' in your MySQL database
+        const query = `
+          UPDATE Coupons
+          SET type = ?, userLimit = ?, minShoppingAmount = ?, maxShoppingAmount = ?,
+              startDate = ?, endDate = ?, discount = ?, discountType = ?
+          WHERE couponId = ?`;
+
+        const values = [
+          data.type, data.userLimit, data.minShoppingAmount, data.maxShoppingAmount,
+          data.startDate, data.endDate, data.discount, data.discountType,
+          data.couponId
+        ];
+
+        connection.query(query, values, (error, results) => {
+          if (error) {
+            console.error('Error executing MySQL query:', error);
+            return this.res.send({ status: 0, message: "Internal server error" });
+          }
+
+          return this.res.send({ status: 1, message: "Coupon details updated successfully" });
+        });
+      } else {
+        data['couponCode'] = await this.commonService.randomGenerator(8, 'capital');
+
+        // Assuming you have a table named 'Coupons' in your MySQL database
+        const query = `
+          INSERT INTO Coupons (type, userLimit, minShoppingAmount, maxShoppingAmount, startDate, endDate, discount, discountType, couponCode)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        const values = [
+          data.type, data.userLimit, data.minShoppingAmount, data.maxShoppingAmount,
+          data.startDate, data.endDate, data.discount, data.discountType, data.couponCode
+        ];
+
+        connection.query(query, values, (error, results) => {
+          if (error) {
+            console.error('Error executing MySQL query:', error);
+            return this.res.send({ status: 0, message: "Internal server error" });
+          }
+
+          return this.res.send({ status: 1, message: "Coupon details added successfully" });
+        });
+      }
+    } catch (error) {
+      console.error("error- ", error);
+      this.res.send({ status: 0, message: error });
     }
+  }
 
     /********************************************************
    Purpose: Get Coupon Details
@@ -66,22 +102,38 @@ class CouponsController extends Controller {
    Return: JSON String
    ********************************************************/
     async getCouponDetails() {
-        try {
-            const data = this.req.params;
-            if (!data.couponId) {
-                return this.res.send({ status: 0, message: "Please send couponId" });
-            }
-            const coupon = await Coupons.findOne({ _id: data.couponId, isDeleted: false }, { _v: 0 });
-            if (_.isEmpty(coupon)) {
-                return this.res.send({ status: 0, message: "Coupon details not found" });
-            }
-            return this.res.send({ status: 1, data: coupon });
-        } catch (error) {
-            console.log("error- ", error);
-            return this.res.send({ status: 0, message: "Internal server error" });
-        }
-    }
+    try {
+      const data = this.req.params;
+      if (!data.couponId) {
+        return this.res.send({ status: 0, message: "Please send couponId" });
+      }
 
+      // Assuming you have a table named 'Coupons' in your MySQL database
+      const query = `
+        SELECT *
+        FROM Coupons
+        WHERE couponId = ?`;
+
+      connection.query(query, [data.couponId], (error, results) => {
+        if (error) {
+          console.error('Error executing MySQL query:', error);
+          return this.res.send({ status: 0, message: "Internal server error" });
+        }
+
+        if (results.length === 0) {
+          return this.res.send({ status: 0, message: "Coupon details not found" });
+        }
+
+        const coupon = results[0];
+        delete coupon._v; // Remove the '_v' field if it exists
+
+        return this.res.send({ status: 1, data: coupon });
+      });
+    } catch (error) {
+      console.error("error- ", error);
+      return this.res.send({ status: 0, message: "Internal server error" });
+    }
+  }
     /********************************************************
  Purpose: single and multiple coupons change status
  Parameter:
@@ -151,40 +203,34 @@ class CouponsController extends Controller {
       ********************************************************/
     async couponsListing() {
         try {
-            const data = this.req.body;
-            const skip = (parseInt(data.page) - 1) * parseInt(data.pagesize);
-            const sort = data.sort ? data.sort : { _id: -1 };
-            const limit = data.pagesize;
-            let query = [{}];
-            if (data.startDate || data.endDate) {
-                query = await new DownloadsController().dateFilter({ key: 'createdAt', startDate: data.startDate, endDate: data.endDate })
-                console.log(`query: ${JSON.stringify(query)}`)
-            }
-            if (data.searchText) {
-                let regex = { $regex: `.*${this.req.body.searchText}.*`, $options: 'i' };
-                query.push({ $or: [{ couponCode: regex }] })
-            }
-            const result = await Coupons.aggregate([
-                { $match: { isDeleted: false, $and: query } },
-                {
-                    $project: {
-                        createdAt: 1, couponCode: 1, discountType: 1, discount: 1, minShoppingAmount: 1,
-                        maxShoppingAmount: 1, userLimit: 1, startDate: 1, endDate: 1, status: 1
-                    }
-                },
-                { $sort: sort },
-                { $skip: skip },
-                { $limit: limit },
-            ]);
-            const total = await Coupons.aggregate([
-                { $match: { isDeleted: false, $and: query } },
-                { $project: { _id: 1 } }
-            ])
-            return this.res.send({ status: 1, message: "Listing details are: ", data: result, page: data.page, pagesize: data.pagesize, total: total.length });
-        } catch (error) {
-            console.log("error- ", error);
-            return this.res.send({ status: 0, message: "Internal server error" });
+      const data = this.req.params;
+      
+
+      // Assuming you have a table named 'Coupons' in your MySQL database
+      const query = `
+        SELECT *
+        FROM Coupons
+        WHERE status = 1`;
+
+      connection.query(query, (error, results) => {
+        if (error) {
+          console.error('Error executing MySQL query:', error);
+          return this.res.send({ status: 0, message: "Internal server error" });
         }
+
+        if (results.length === 0) {
+          return this.res.send({ status: 0, message: "Coupon details not found" });
+        }
+
+        const coupon = results[0];
+        delete coupon._v; // Remove the '_v' field if it exists
+
+        return this.res.send({ status: 1, data: coupon });
+      });
+    } catch (error) {
+      console.error("error- ", error);
+      return this.res.send({ status: 0, message: "Internal server error" });
+    }
     }
 
     /********************************************************

@@ -10,6 +10,8 @@ module.exports = (router, app) => {
     require('../routes/user/orders')(router, app);
     require('../routes/common/categories')(router, app);
     require('../routes/admin/banner')(router, app);
+    require('../routes/admin/coupons')(router, app);
+    require('../routes/user/coupons')(router, app);
     require('../routes/common/banner')(router, app);
     require('../routes/common/allProducts')(router, app);
 };

@@ -23,11 +23,7 @@ class UsersController extends Controller {
     try {
       let fieldsArray = [
         "fullName",
-        "dob",
-        "gender",
-        "age",
         "emailId",
-        "countryId",
         "mobileNo",
         "password",
         "termsAndConditions"
@@ -61,7 +57,8 @@ class UsersController extends Controller {
                   console.error('Error adding item to cart:', err);
                   this.res.status(500).json({ error: 'Failed to add item to cart' });
                 } else {
-                  this.res.status(200).json({ message: 'Item added to cart successfully' });
+                  return this.res.send({
+              status: 1, message: 'Item added to cart successfully' });
                 }
               });
             }
@@ -270,7 +267,17 @@ class UsersController extends Controller {
   );
   }
 
-
+async getUserAddresses(){
+    const userId =  this.req.user;
+    const newAddress = this.req.body.address;
+  connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
+    if (err) throw err;
+    let existingAddresses ;
+     existingAddresses = JSON.parse(results[0].shippingAddresses || []);
+      this.res.status(200).json(existingAddresses);
+  });
+  }
+  
   async userAddresses(){
     const userId =  this.req.user;
     const newAddress = this.req.body.address;
@@ -311,6 +318,35 @@ class UsersController extends Controller {
     });
   });
   }
+
+
+
+async userAddressesUpdateDefault () {
+  const userId = this.req.user;
+  const addressId = this.req.params.addressId;
+  const updatedAddress = this.req.body.address;
+
+  // Retrieve the existing addresses of the user
+  connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
+    if (err) throw err;
+    const existingAddresses = JSON.parse(results[0].shippingAddresses || []);
+
+    // Iterate through existing addresses to set 'default' property
+    for (let i = 0; i < existingAddresses.length; i++) {
+      if (i === addressId) {
+        existingAddresses[i] = { ...updatedAddress, defaultAddress: true };
+      } else {
+        existingAddresses[i].defaultAddress = false;
+      }
+    }
+console.log(JSON.stringify(existingAddresses));
+    // Update the addresses in the database
+    connection.query('UPDATE users SET shippingAddresses = ? WHERE _id = ?', [JSON.stringify(existingAddresses), userId], (err) => {
+      if (err) throw err;
+      this.res.status(200).send('Address updated successfully!');
+    });
+  });
+}
 
 
   async userAddressesDelete(){
@@ -358,6 +394,93 @@ class UsersController extends Controller {
       console.error(err);
       this.res.status(500).send('Internal server error');
     }
+}
+
+async addReview() {
+        try {
+    const data = this.req.body;
+    const fieldsArray = ["rating", "title", "description", "type", "productId"];
+
+    const emptyFields = fieldsArray.filter(field => !data[field]);
+    if (emptyFields.length > 0) {
+      return this.res.send({ status: 0, message: `Please send ${emptyFields.join(', ')} fields required.` });
+    }
+
+    // Checking user
+    const currentUserId = this.req.user;
+    data.userId = currentUserId;
+
+    const userQuery = `SELECT fullName FROM users WHERE _id = ?`;
+    connection.query(userQuery, [currentUserId], async (userErr, userResults) => {
+      if (userErr) {
+        console.error('Error fetching user:', userErr);
+        return this.res.send({ status: 0, message: 'Internal server error' });
+      }
+
+      const user = userResults[0];
+      // Insert new review into the database
+      const newReviewQuery = `INSERT INTO Reviews (rating, title, description, type, productId, image, userId) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      const newReviewValues = [data.rating, data.title, data.description, data.type, data.productId, data.image, data.userId];
+
+      connection.query(newReviewQuery, newReviewValues, (reviewErr, reviewResults) => {
+        if (reviewErr) {
+          console.error('Error adding review:', reviewErr);
+          return this.res.send({ status: 0, message: 'Internal server error' });
+        }
+
+        const newReviewId = reviewResults.insertId;
+        const newReview = { id: newReviewId, ...data, userFullName: user.fullName };
+        return this.res.send({ status: 1, message: 'Details added successfully', data: newReview });
+      });
+    });
+  } catch (error) {
+    console.error(`Error: ${error}`);
+    return this.res.send({ status: 0, message: 'Internal server error' });
+  }
+    }
+
+
+
+async getReview() {
+  try {
+    const productId = this.req.query.productId; // Get product ID from query parameter
+
+    let getReviewsQuery = `
+      SELECT r.*, u.fullName
+      FROM Reviews r
+      INNER JOIN users u ON r.userId = u._id
+    `;
+
+    if (productId) {
+      getReviewsQuery += ` WHERE r.productId = ?`;
+    }
+
+    connection.query(getReviewsQuery, [productId], (getReviewsErr, reviewsResults) => {
+      if (getReviewsErr) {
+        console.error('Error fetching reviews:', getReviewsErr);
+        return this.res.send({ status: 0, message: 'Internal server error' });
+      }
+
+      const reviews = reviewsResults.map(review => {
+        return {
+          id: review.id,
+          rating: review.rating,
+          title: review.title,
+          description: review.description,
+          type: review.type,
+          productId: review.productId,
+          image: review.image,
+          userId: review.userId,
+          userFullName: review.fullName
+        };
+      });
+
+      return this.res.send({ status: 1, message: 'Reviews fetched successfully', data: reviews });
+    });
+  } catch (error) {
+    console.error(`Error: ${error}`);
+    return this.res.send({ status: 0, message: 'Internal server error' });
+  }
 }
 
 }
