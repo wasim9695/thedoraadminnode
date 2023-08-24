@@ -483,5 +483,45 @@ async getReview() {
   }
 }
 
+
+async logOut() {
+        try {
+            const token = this.req.token;
+            // console.log("token", token)
+            if (! token) {
+                return this.res.send({status: 0, message: "Please send the token"});
+            }
+            const authQuery = 'SELECT * FROM access_tokens WHERE token = ? AND userId = ?';
+    connection.query(authQuery, [token, this.req.user], (error, authRows) => {
+      if (error) {
+        console.error('error - ', error);
+        return this.res.send({ status: 0, message: 'Internal server error' });
+      }
+
+      if (authRows.length === 0) {
+        return this.res.send({ status: 0, message: 'Invalid token' });
+      }
+        const updateQuery = 'UPDATE access_tokens SET token = "", refreshToken = "", action = "Logout" WHERE _id = ?';
+      connection.query(updateQuery, [authRows[0]._id], (updateError, updateResult) => {
+        if (updateError) {
+          console.error('error - ', updateError);
+          return this.res.send({ status: 0, message: 'Failed to logout' });
+        }
+
+        if (updateResult.affectedRows === 0) {
+          return this.res.send({ status: 0, message: 'Failed to logout' });
+        }
+
+        return this.res.send({ status: 1, message: 'Successfully logged out' });
+      });
+    });
+        } catch (error) {
+            console.log("error- ", error);
+            return this.res.send({status: 0, message: "Internal server error"});
+        }
+    }
+
+
+
 }
 module.exports = UsersController;

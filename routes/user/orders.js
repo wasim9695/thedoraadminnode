@@ -19,14 +19,14 @@ module.exports = (router, app) => {
     return orderObj.getAllOrder();
   });
 
-  router.get(
-    "/orders/:user_id",
-    Authorization.isAuthorised,
-    (req, res, next) => {
-      const orderObj = new OrderController().boot(req, res);
-      return orderObj.getAllOrder();
-    },
-  );
+  // router.get(
+  //   "/orders/:user_id",
+  //   Authorization.isAuthorised,
+  //   (req, res, next) => {
+  //     const orderObj = new OrderController().boot(req, res);
+  //     return orderObj.getAllOrder();
+  //   },
+  // );
 
   router.get(
     "/orders/:user_id/:id",

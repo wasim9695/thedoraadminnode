@@ -105,5 +105,10 @@ module.exports = (router, app) => {
   );
  
 
+ router.get("/logOut", Authorization.isAuthorised, (req, res, next) => {
+    const authObj = new UsersController().boot(req, res);
+    return authObj.logOut();
+  });
+
 
 }

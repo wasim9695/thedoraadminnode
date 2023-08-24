@@ -71,14 +71,14 @@ class CategoriesController extends Controller {
       
                 let custom = '';
                 let check = name.replace(/ /g, '-').replace(/[^\w-]+/g, '').replace(/\-\-+/g, '-');
-                for (let i = 0; i < category.length; i++) {
-                  const customCategory = await checkCustomUrl(check);
-                  if (customCategory.length === 0) {
-                    break;
-                  } else {
-                    check = check + i;
-                  }
-                }
+                // for (let i = 0; i < category.length; i++) {
+                //   const customCategory = await checkCustomUrl(check);
+                //   if (customCategory.length === 0) {
+                //     break;
+                //   } else {
+                //     check = check + i;
+                //   }
+                // }
       
                 let middle = name.substring(0, 3);
                 data.categoryName = name;
@@ -620,19 +620,19 @@ async addSubCategory() {
           }
 
           let custom = '';
-          let check = name.replace(/ /g, '-').replace(/[^\w-]+/g, '').replace(/\-\-+/g, '-');
-          for (let i = 0; i < category.length; i++) {
-            const customCategory = await checkCustomUrl(check);
-            if (customCategory.length === 0) {
-              break;
-            } else {
-              check = check + i;
-            }
-          }
+          // let check = name.replace(/ /g, '-').replace(/[^\w-]+/g, '').replace(/\-\-+/g, '-');
+          // for (let i = 0; i < category.length; i++) {
+          //   const customCategory = await checkCustomUrl(check);
+          //   if (customCategory.length === 0) {
+          //     break;
+          //   } else {
+          //     check = check + i;
+          //   }
+          // }
 
           let middle = name.substring(0, 3);
           data.subcategoryName = name;
-          data.customUrl = check;
+          // data.customUrl = check;
 
           const insertCategoryQuery = 'INSERT INTO subcategories SET ?';
           connection.query(insertCategoryQuery, [data], (err, newCategory) => {

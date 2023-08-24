@@ -75,13 +75,37 @@ class OrderController extends Controller {
   async getAllOrder() {
     try {
       let user_id = "";
-      if (this.req.params) {
-        user_id = this.req.params;
+      if (this.req.user) {
+        user_id = this.req.user;
       } else {
         user_id = this.req.user;
       }
-      const order = await Order.find({ user_id: user_id?.user_id });
-      return this.res.send({ status: 1, data: order, message: "Orders" });
+        const duplicateCheckQuery = 'SELECT * FROM orders WHERE userId = ?';
+        connection.query(duplicateCheckQuery, [user_id], (err, result) => {
+
+const totalRecords = result.length;
+            const productsAll = result.map((data) => {
+              const product = {
+                 products: JSON.parse(`${data.products}`),
+               _id: data._id,
+               orderId: data.orderId,
+                orderDate: data.orderDate,
+                totalAmount: data.totalAmount,
+                paymentMethod: data.paymentMethod,
+                paymentStatus: data.paymentStatus,
+                shippingAddress: data.shippingAddress,
+                shippingCity: data.shippingCity,
+                shippingZipcode: data.shippingZipcode,
+                shippingCountry: data.shippingCountry,
+                discount: data.discount,
+                deliveryCharges: data.deliveryCharges,
+                orderStatus: data.orderStatus, 
+              };
+              return product;
+            });
+
+      return this.res.send({ status: 1, data: productsAll, message: "Orders" });
+      });
     } catch (error) {
       console.log("error- ", error);
       return this.res.send({ status: 0, message: "Internal server error" });
