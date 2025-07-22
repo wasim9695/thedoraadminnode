@@ -20,6 +20,15 @@ module.exports = (router, app) => {
         const categoryObj = (new ProductsController()).boot(req, res);
         return categoryObj.getTodayDeal();
     });
+  
+  router.get('/getTodayNewArrivals', (req, res, next) => {
+        const categoryObj = (new ProductsController()).boot(req, res);
+        return categoryObj.getTodayNewArrival();
+    });
+
+
+
+
      router.get('/getfastival', (req, res, next) => {
         const categoryObj = (new ProductsController()).boot(req, res);
         return categoryObj.getFastival();

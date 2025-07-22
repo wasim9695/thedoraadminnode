@@ -5,7 +5,7 @@ let pool = mysql.createPool({
     port:'3307',
   user: 'root',
   password: '',
-  database: 'nexteccom'
+  database: 'nexteccoms'
 });
 
 pool.getConnection(function(err) {

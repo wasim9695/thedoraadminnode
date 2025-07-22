@@ -31,9 +31,13 @@ module.exports = (router, app) => {
     const categoryObj = (new CategoriesController()).boot(req, res);
     return categoryObj.categoryListing();
   });
-  router.post('/categoryList', (req, res, next) => {
+  router.get('/categoryList', (req, res, next) => {
     const categoryObj = (new CategoriesController()).boot(req, res);
     return categoryObj.categoryList();
+  });
+   router.get('/subcategoryList', (req, res, next) => {
+    const categoryObj = (new CategoriesController()).boot(req, res);
+    return categoryObj.subcategoryList();
   });
 
   router.get('/getParentCategoryName/:categoryId', Authorization.isAdminAuthorised, (req, res, next) => {

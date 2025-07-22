@@ -47,74 +47,197 @@ class AttributesController extends Controller {
       }               
       Return: JSON String
   ********************************************************/
-    async addAndUpdateAttribute() {
-            try {
-              let fieldsArray = [
-                "name",
-                "price",
-                "type"
-              ];
-              let emptyFields = await this.requestBody.checkEmptyWithFields(this.req.body, fieldsArray);
-              
-              if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-                return this.res.send({
-                  status: 0,
-                  message: "Please send the following fields: " + emptyFields.toString() + "."
-                });
-              } else {
-                const query = 'INSERT INTO productsattr SET ?';
-                const userData = this.req.body;
-                 if(userData._id){
-                    const updateQuery = 'UPDATE productsattr SET price = ?, type = ?, name = ? WHERE _id = ?';
-                    const updateValues = [userData.price, userData.type, userData.name, userData._id];
-        
-                    connection.query(updateQuery, updateValues, (err, result) => {
-                      if (err) {
-                        console.error('Error updating attribute:', err);
-                        return this.res.status(500).json({ error: 'Failed to update attribute' });
-                      } else {
-                        this.res.status(200).json({ message: 'Attribute updated successfully' });
-                      }
-                    });
-                 }else{
-                // Check if the name or email already exists in the table
-                const duplicateCheckQuery = 'SELECT COUNT(*) AS count FROM productsattr WHERE name = ?';
-                connection.query(duplicateCheckQuery, [userData.name], (err, result) => {
-                  if (err) {
-                    console.error('Error adding item to cart:', err);
-                    this.res.status(500).json({ error: 'Failed to add item to cart' });
-                  } else {
-                    const count = result[0].count;
-              
-                    if (count > 0) {
-                      this.res.status(400).json({ error: 'Name already exists' });
-                    } else {
-                      if(userData._id){
-                        
-                      }
-
-                      // Insert the data into the table
-                      connection.query(query, userData, (err, result) => {
-                        if (err) {
-                          console.error('Error adding item to cart:', err);
-                          this.res.status(500).json({ error: 'Failed to add item to cart' });
-                        } else {
-                          this.res.status(200).json({ message: ' added to  successfully' });
-                        }
-                      });
-                    }
-                  }
-                });
-            }
-              
-              }
-        
-            } catch (error) {
-              console.log("error = ", error);
-              return this.res.send({ status: 0, message: "Internal server error" });
-            }
+      async addAndUpdateAttribute() {
+        let conn; // Declare connection variable
+        try {
+          const data = this.req.body;
+      
+          // Get a connection from the pool
+          conn = await new Promise((resolve, reject) => {
+            connection.getConnection((err, connection) => {
+              if (err) reject(err);
+              resolve(connection);
+            });
+          });
+      
+          // Start transaction
+          await new Promise((resolve, reject) => {
+            conn.beginTransaction(err => {
+              if (err) reject(err);
+              resolve();
+            });
+          });
+      
+          // Validate required fields
+          const requiredFields = ["product_id", "attribute_name", "attribute_value"];
+          const emptyFields = await this.requestBody.checkEmptyWithFields(data, requiredFields);
           
-    }
+          if (emptyFields?.length) {
+            await new Promise(resolve => conn.rollback(() => resolve()));
+            conn.release();
+            return this.res.status(400).json({
+              status: 0,
+              message: `Missing required fields: ${emptyFields.join(', ')}`
+            });
+          }
+      
+          // Helper function to execute queries
+          const executeQuery = (sql, values) => new Promise((resolve, reject) => {
+            conn.query(sql, values, (err, results) => {
+              if (err) reject(err);
+              resolve(results);
+            });
+          });
+      
+          if (data.id) {
+            // Update existing attribute
+            const existing = await executeQuery(
+              'SELECT id FROM product_attributes WHERE id = ?',
+              [data.id]
+            );
+      
+            if (existing.length === 0) {
+              await new Promise(resolve => conn.rollback(() => resolve()));
+              conn.release();
+              return this.res.status(404).json({ error: 'Attribute not found' });
+            }
+      
+            // Perform update
+            const result = await executeQuery(
+              `UPDATE product_attributes 
+               SET attribute_name = ?, attribute_value = ?, product_id = ?
+               WHERE id = ?`,
+              [data.attribute_name, data.attribute_value, data.product_id, data.id]
+            );
+      
+            await new Promise((resolve, reject) => {
+              conn.commit(err => {
+                if (err) reject(err);
+                resolve();
+              });
+            });
+      
+            conn.release();
+            return this.res.status(200).json({
+              message: 'Attribute updated successfully',
+              affectedRows: result.affectedRows
+            });
+      
+          } else {
+            // Check for duplicate attribute
+            const existing = await executeQuery(
+              `SELECT id FROM product_attributes 
+               WHERE product_id = ? 
+               AND attribute_name = ? 
+               AND attribute_value = ?`,
+              [data.product_id, data.attribute_name, data.attribute_value]
+            );
+      
+            if (existing.length > 0) {
+              await new Promise(resolve => conn.rollback(() => resolve()));
+              conn.release();
+              return this.res.status(409).json({ 
+                error: 'Attribute already exists for this product' 
+              });
+            }
+      
+            // Insert new attribute
+            const result = await executeQuery(
+              `INSERT INTO product_attributes 
+               (product_id, attribute_name, attribute_value)
+               VALUES (?, ?, ?)`,
+              [data.product_id, data.attribute_name, data.attribute_value]
+            );
+      
+            await new Promise((resolve, reject) => {
+              conn.commit(err => {
+                if (err) reject(err);
+                resolve();
+              });
+            });
+      
+            conn.release();
+            return this.res.status(201).json({
+              message: 'Attribute added successfully',
+              attributeId: result.insertId
+            });
+          }
+        } catch (error) {
+          if (conn) {
+            await new Promise(resolve => conn.rollback(() => resolve()));
+            conn.release();
+          }
+          console.error('Attribute operation failed:', error);
+          return this.res.status(500).json({ 
+            error: 'Internal server error',
+            details: error.message 
+          });
+        }
+      }
+      
+
+
+
+      async getProductsWithAttributes() {
+        let conn; // Declare connection variable
+        try {
+          // Get connection from pool
+          conn = await new Promise((resolve, reject) => {
+            connection.getConnection((err, connection) => {
+              if (err) reject(err);
+              resolve(connection);
+            });
+          });
+      
+          const query = `
+            SELECT 
+              p._id AS product_id,
+              p.name,
+              p.sku,
+              p.unitprice,
+              p.stock,
+              COALESCE(GROUP_CONCAT(
+                CASE WHEN pa.attribute_name = 'Color' 
+                THEN pa.attribute_value END
+              ), '') AS colors,
+              COALESCE(GROUP_CONCAT(
+                CASE WHEN pa.attribute_name = 'Size' 
+                THEN pa.attribute_value END
+              ), '') AS sizes
+            FROM 
+              products AS p
+            LEFT JOIN 
+              product_attributes AS pa ON p._id = pa.product_id
+            WHERE 
+              p.status = 'active'
+            GROUP BY 
+              p._id, p.name, p.sku, p.unitprice, p.stock;
+          `;
+      
+          // Execute query
+          const results = await new Promise((resolve, reject) => {
+            conn.query(query, (err, results) => {
+              if (err) reject(err);
+              resolve(results);
+            });
+          });
+      
+          return this.res.status(200).json(results);
+      
+        } catch (error) {
+          console.error('Error fetching products:', error);
+          return this.res.status(500).json({ 
+            error: 'Internal server error',
+            details: error.message 
+          });
+        } finally {
+          // Release connection back to pool
+          if (conn) conn.release();
+        }
+      }
+      
+      
+      
 
     /********************************************************
    Purpose: Get Attribute Details

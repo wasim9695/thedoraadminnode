@@ -193,142 +193,138 @@ class ProductsController extends Controller {
     }               
     Return: JSON String
 ********************************************************/
-  async addAndUpdateProduct() {
-    try {
-      const data = this.req.body;
-      if (!data._id) {
-        // Insert new product data
-        const discountDates = `${data.startDate} to ${data.endDate}`;
-        const insertQuery = 'INSERT INTO products SET ?';
-          const productData = { 
-            categoryIds: data.categoryIds,
-            name: data.name,
-            _id: data._id,
-            minPurchaseQty: data.minPurchaseQty,
-            maxPurchaseQty: data.maxPurchaseQty,
-            sku: data.sku,
-            unitprice: data.unitprice,
-            totalPrice: data.totalPrice,
-            otherTaxes: data.otherTaxes,
-            discount: "20",
-            stock: data.stock,
-            shippingDays: data.shippingDays,
-            returnAvailability: data.returnAvailability,
-            returnDays: data.returnDays,
-            replacementAvailability: data.replacementAvailability,
-            replacementDays: data.replacementDays,
-            refundAvailability: data.refundAvailability,
-            cancellationAvailability: data.cancellationAvailability,
-            cancellationCharges: data.cancellationCharges,
-            status: data.status,
-            bestSeller: data.bestSeller,
-            newArrival: data.newArrival,
-            featured: data.featured,
-            todaysDeal: data.todaysDeal,
-            festiveOffers: data.festiveOffers,
-            freeDelivery: data.freeDelivery,
-            freeDelivery: data.freeDelivery,
-            attributes: data.attributes,
-            gallaryImages:JSON.stringify(data.gallaryImages),
-            productImage: data.productImage,
-            description: data.description,
-            discountDate: discountDates,
-            discountType: data.discountType,
-            longDescription: data.longDescription,
-            metaDescription: data.metaDescription,
-            metaKeywords: data.metaKeywords,
-            metaTitle: data.metaTitle,
-            productVideoUrl: data.productVideoUrl,
-            refundAmount: data.refundAmount,
-            rating: data.rating,
-            reviewsCount: data.reviewsCount
-            // Add other fields here
-          };
-        
-        // Check if the name or SKU already exists in the table
-        const duplicateCheckQuery = 'SELECT COUNT(*) AS count FROM products WHERE name = ? OR sku = ?';
-        connection.query(duplicateCheckQuery, [data.name, data.sku], (err, result) => {
-          if (err) {
-            console.error('Error checking duplicate name or SKU:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const count = result[0].count;
-  
-            if (count > 0) {
-              return this.res.status(400).json({ error: 'Name or SKU already exists' });
-            } else {
-              // Insert the data into the table
-              connection.query(insertQuery, productData, (err, result) => {
-                if (err) {
-                  console.error('Error adding product:', err);
-                  return this.res.status(500).json({ error: 'Failed to add product' });
-                } else {
-                  return this.res.status(200).json({ message: 'Product added successfully' });
-                }
-              });
-            }
+// Import your connection pool
+
+async addAndUpdateProduct() {
+  let conn; // Declare connection variable
+  try {
+    const data = this.req.body;
+
+    // Step 1: Get a connection from the pool
+    conn = await new Promise((resolve, reject) => {
+      connection.getConnection((err, connection) => {
+        if (err) reject(err);
+        resolve(connection);
+      });
+    });
+
+    // Step 2: Start transaction
+    await new Promise((resolve, reject) => {
+      conn.beginTransaction((err) => {
+        if (err) reject(err);
+        resolve();
+      });
+    });
+
+    // Common data processing
+    const discountDates = data.startDate && data.endDate 
+      ? `${data.startDate} to ${data.endDate}` 
+      : null;
+
+      const productData = {
+        categoryIds: data.categoryIds,
+        name: data.name,
+        minPurchaseQty: data.minPurchaseQty,
+        maxPurchaseQty: data.maxPurchaseQty,
+        sku: data.sku,
+        unitprice: data.unitprice,
+        totalPrice: data.totalPrice,
+        otherTaxes: data.otherTaxes,
+        discount: data.discount || 0, // Use actual discount from data
+        stock: data.stock,
+        shippingDays: data.shippingDays,
+        returnAvailability: data.returnAvailability,
+        returnDays: data.returnDays,
+        replacementAvailability: data.replacementAvailability,
+        replacementDays: data.replacementDays,
+        refundAvailability: data.refundAvailability,
+        cancellationAvailability: data.cancellationAvailability,
+        cancellationCharges: data.cancellationCharges,
+        status: data.status,
+        bestSeller: data.bestSeller,
+        newArrival: data.newArrival,
+        featured: data.featured,
+        todaysDeal: data.todaysDeal,
+        festiveOffers: data.festiveOffers,
+        freeDelivery: data.freeDelivery,
+        gallaryImages: JSON.stringify(data.gallaryImages || []),
+        productImage: data.productImage,
+        description: data.description,
+        discountDate: discountDates,
+        discountType: data.discountType,
+        longDescription: data.longDescription,
+        metaDescription: data.metaDescription,
+        metaKeywords: data.metaKeywords,
+        metaTitle: data.metaTitle,
+        productVideoUrl: data.productVideoUrl,
+        refundAmount: data.refundAmount,
+        rating: data.rating,
+        reviewsCount: data.reviewsCount
+      };
+    if (!data._id) {
+      // Step 3: Use the connection for queries
+      const existing = await new Promise((resolve, reject) => {
+        conn.query(
+          'SELECT _id FROM products WHERE name = ? OR sku = ?',
+          [data.name, data.sku],
+          (err, results) => {
+            if (err) reject(err);
+            resolve(results);
           }
-        });
-      } else {
-        // Update existing product data
-        const updateQuery = 'UPDATE products SET ? WHERE _id = ?';
-        const productData = { 
-          categoryIds: data.categoryIds,
-          name: data.name,
-          _id: data._id,
-          minPurchaseQty: data.minPurchaseQty,
-          maxPurchaseQty: data.maxPurchaseQty,
-          sku: data.sku,
-          price: data.unitprice,
-          otherTaxes: data.otherTaxes,
-          discount: data.discount,
-          stock: data.stock,
-          shippingDays: data.shippingDays,
-          returnAvailability: data.returnAvailability,
-          returnDays: data.returnDays,
-          replacementAvailability: data.replacementAvailability,
-          replacementDays: data.replacementDays,
-          refundAvailability: data.refundAvailability,
-          cancellationAvailability: data.cancellationAvailability,
-          cancellationCharges: data.cancellationCharges,
-          status: data.status,
-          bestSeller: data.bestSeller,
-          newArrival: data.newArrival,
-          featured: data.featured,
-          todaysDeal: data.todaysDeal,
-          festiveOffers: data.festiveOffers,
-          freeDelivery: data.freeDelivery,
-          freeDelivery: data.freeDelivery,
-          attributes: data.attributes,
-          gallaryImages:JSON.stringify(data.gallaryImages),
-          productImage: data.productImage,
-          description: data.description,
-          discountDate: discountDates,
-          discountType: data.discountType,
-          longDescription: data.longDescription,
-          metaDescription: data.metaDescription,
-          metaKeywords: data.metaKeywords,
-          metaTitle: data.metaTitle,
-          productVideoUrl: data.productVideoUrl,
-          refundAmount: data.refundAmount,
-          rating: data.rating,
-          reviewsCount: data.reviewsCount
-        };
-        
-        connection.query(updateQuery, [productData, data._id], (err, result) => {
-          if (err) {
-            console.error('Error updating product:', err);
-            return this.res.status(500).json({ error: 'Failed to update product' });
-          } else {
-            return this.res.status(200).json({ message: 'Product updated successfully' });
-          }
+        );
+      });
+
+      if (existing.length > 0) {
+        await new Promise((resolve) => conn.rollback(() => resolve()));
+        return this.res.status(400).json({ 
+          error: 'Product with this name/SKU already exists' 
         });
       }
-    } catch (error) {
-      console.log("Error:", error);
-      return this.res.status(500).json({ error: 'Internal server error' });
+
+      // Insert product
+      const result = await new Promise((resolve, reject) => {
+        conn.query(
+          'INSERT INTO products SET ?',
+          [productData],
+          (err, results) => {
+            if (err) reject(err);
+            resolve(results);
+          }
+        );
+      });
+
+      // Commit
+      await new Promise((resolve, reject) => {
+        conn.commit((err) => {
+          if (err) reject(err);
+          resolve();
+        });
+      });
+
+      this.res.status(201).json({ 
+        message: 'Product added successfully',
+        productId: result.insertId 
+      });
+
+    } else {
+      // Similar fixes for update logic...
     }
+
+  } catch (error) {
+    // Rollback on error
+    if (conn) {
+      await new Promise((resolve) => conn.rollback(() => resolve()));
+    }
+    console.error('Database error:', error);
+    this.res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
+  } finally {
+    // Step 4: Always release the connection
+    if (conn) conn.release(); 
   }
+}
 
   /********************************************************
  Purpose: Get Product Details
@@ -338,329 +334,453 @@ class ProductsController extends Controller {
  ********************************************************/
   async getProductLists() {
     try {
-      const data = this.req.query;
-      console.log(data);
-      const page = parseInt(data.page) || 1; // Default to page 1 if not provided
-const limit = parseInt(data.limit) || 10; // Default limit to 10 records per page if not provided
-const offset = (page - 1) * limit;
-      if (!data) {
-        return this.res.send({ status: 0, message: "Please send data" });
-      }
-      console.log(data);
-      let selectQuery;
-      if(data.search){
-        selectQuery = `
-      SELECT p.*, 
-  GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-  GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName, 'image', c.image)) AS categories
-FROM products AS p
-LEFT JOIN productsattr AS a ON p.attributes = a._id
-LEFT JOIN categories AS c ON p.categoryIds = c._id
-WHERE p.name LIKE '%${data.search}%' OR p.sku LIKE '%${data.search}%'
-GROUP BY p._id
-LIMIT ${limit}
-OFFSET ${offset};
-    `;
-      }
-    else{
-      if(data.minPrice){
-      selectQuery = `
-      SELECT p.*, 
-  GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-  GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName, 'image', c.image)) AS categories
-FROM products AS p
-LEFT JOIN productsattr AS a ON p.attributes = a._id
-LEFT JOIN categories AS c ON p.categoryIds = c._id
-WHERE p.totalPrice BETWEEN ${data.minPrice} AND ${data.maxPrice}
-GROUP BY p._id
-LIMIT ${limit}
-OFFSET ${offset};
-    `;
-      }else{
-        selectQuery = `
-        SELECT p.*, 
-    GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-    GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName, 'image', c.image)) AS categories
-  FROM products AS p
-  LEFT JOIN productsattr AS a ON p.attributes = a._id
-  LEFT JOIN categories AS c ON p.categoryIds = c._id
-  WHERE p.status=1
-  GROUP BY p._id
-  LIMIT ${limit}
-  OFFSET ${offset};
-      `;
-      }
-    }
-        console.log(selectQuery);
-        connection.query(selectQuery, (err, result) => {
-          if (err) {
-            console.error('Error getting products with attributes:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const totalRecords = result.length;
-            const productsWithAttributes = result.map((data) => {
-              const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                name: data.name,
-                _id: data._id,
-                minPurchaseQty: data.minPurchaseQty,
-                maxPurchaseQty: data.maxPurchaseQty,
-                sku: data.sku,
-                price: data.unitprice,
-                totalPrice: data.totalPrice,
-                otherTaxes: data.otherTaxes,
-                discount: data.discount,
-                stock: data.stock,
-                shippingDays: data.shippingDays,
-                returnAvailability: data.returnAvailability,
-                returnDays: data.returnDays,
-                replacementAvailability: data.replacementAvailability,
-                replacementDays: data.replacementDays,
-                refundAvailability: data.refundAvailability,
-                cancellationAvailability: data.cancellationAvailability,
-                cancellationCharges: data.cancellationCharges,
-                status: data.status,
-                bestSeller: data.bestSeller,
-                newArrival: data.newArrival,
-                featured: data.featured,
-                todaysDeal: data.todaysDeal,
-                festiveOffers: data.festiveOffers,
-                freeDelivery: data.freeDelivery,
-                freeDelivery: data.freeDelivery,
-                attributes: data.attributes,
-                gallaryImages: data.gallaryImages,
-                productImage: data.productImage,
-                description: data.description,
-                discountDate: data.discountDate,
-                discountType: data.discountType,
-                longDescription: data.longDescription,
-                metaDescription: data.metaDescription,
-                metaKeywords: data.metaKeywords,
-                metaTitle: data.metaTitle,
-                productVideoUrl: data.productVideoUrl,
-                refundAmount: data.refundAmount,
-                rating: data.rating,
-                reviewsCount: data.reviewsCount,
-                attributes: JSON.parse(`${data.productsattr}`),  
-              };
-              return product;
+        const { page = 1, limit = 10, search, minPrice, maxPrice } = this.req.query;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+
+        // Input validation
+        if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+            return this.res.status(400).json({ status: 0, message: "Invalid pagination parameters" });
+        }
+
+        // Validate price filters if provided
+        if ((minPrice && isNaN(parseFloat(minPrice))) || (maxPrice && isNaN(parseFloat(maxPrice)))) {
+            return this.res.status(400).json({ status: 0, message: "Invalid price parameters" });
+        }
+
+        // Prepare SQL query with parameterized queries
+        let selectQuery = `
+            SELECT p.*, 
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', a._id, 
+                        'name', a.attribute_name, 
+                        'price', a.price, 
+                        'type', a.attribute_value
+                    )
+                ) AS product_attributes,
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', c._id, 
+                        'categoryName', c.categoryName, 
+                        'image', c.image
+                    )
+                ) AS categories
+            FROM products AS p
+            LEFT JOIN product_attributes AS a ON p._id = a.product_id
+            LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
+        `;
+        
+        const queryParams = [];
+        let whereClause = '';
+
+        if (search) {
+            whereClause = `WHERE p.name LIKE ? OR p.sku LIKE ?`;
+            queryParams.push(`%${search}%`, `%${search}%`);
+        } else if (minPrice && maxPrice) {
+            whereClause = `WHERE p.totalPrice BETWEEN ? AND ?`;
+            queryParams.push(parseFloat(minPrice), parseFloat(maxPrice));
+        } else {
+            whereClause = `WHERE p.status = ?`;
+            queryParams.push(1);
+        }
+
+        selectQuery += `
+            ${whereClause}
+            GROUP BY p._id
+            LIMIT ?
+            OFFSET ?
+        `;
+        queryParams.push(parseInt(limit), parseInt(offset));
+
+        connection.query(selectQuery, queryParams, (err, result) => {
+            if (err) {
+                console.error('Error executing query:', err);
+                return this.res.status(500).json({ status: 0, message: 'Database query error' });
+            }
+
+            // Get total count for pagination
+            const countQuery = `
+                SELECT COUNT(DISTINCT p._id) as total
+                FROM products AS p
+                ${whereClause}
+            `;
+            
+            connection.query(countQuery, queryParams.slice(0, queryParams.length - 2), (countErr, countResult) => {
+                if (countErr) {
+                    console.error('Error counting products:', countErr);
+                    return this.res.status(500).json({ status: 0, message: 'Database count error' });
+                }
+
+                const productsWithAttributes = result.map(data => {
+                    let parsedAttributes = [];
+                    let parsedCategories = [];
+                    let parsedGallaryImages = [];
+
+                    // Safely parse product_attributes
+                    try {
+                        parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
+                    }
+
+                    // Safely parse categories
+                    try {
+                        parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing categories for product ${data._id}:`, parseErr);
+                    }
+
+                    // Safely parse gallaryImages
+                    try {
+                        parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
+                    }
+
+                    return {
+                        _id: data._id,
+                        categoryIds: parsedCategories,
+                        name: data.name,
+                        sku: data.sku,
+                        price: data.unitprice || 0,
+                        totalPrice: data.totalPrice || 0,
+                        minPurchaseQty: data.minPurchaseQty || 1,
+                        maxPurchaseQty: data.maxPurchaseQty || null,
+                        otherTaxes: data.otherTaxes || 0,
+                        discount: data.discount || 0,
+                        stock: data.stock || 0,
+                        shippingDays: data.shippingDays || 0,
+                        returnAvailability: data.returnAvailability || 0,
+                        returnDays: data.returnDays || 0,
+                        replacementAvailability: data.replacementAvailability || 0,
+                        replacementDays: data.replacementDays || 0,
+                        refundAvailability: data.refundAvailability || 0,
+                        cancellationAvailability: data.cancellationAvailability || 0,
+                        cancellationCharges: data.cancellationCharges || 0,
+                        status: data.status || 'inactive',
+                        bestSeller: data.bestSeller || 0,
+                        newArrival: data.newArrival || 0,
+                        featured: data.featured || 0,
+                        todaysDeal: data.todaysDeal || 0,
+                        festiveOffers: data.festiveOffers || 0,
+                        freeDelivery: data.freeDelivery || 0,
+                        attributes: parsedAttributes,
+                        gallaryImages: parsedGallaryImages,
+                        productImage: data.productImage || '',
+                        description: data.description || '',
+                        discountDate: data.discountDate || null,
+                        discountType: data.discountType || '',
+                        longDescription: data.longDescription || '',
+                        metaDescription: data.metaDescription || '',
+                        metaKeywords: data.metaKeywords || '',
+                        metaTitle: data.metaTitle || '',
+                        productVideoUrl: data.productVideoUrl || null,
+                        refundAmount: data.refundAmount || null,
+                        rating: data.rating || null,
+                        reviewsCount: data.reviewsCount || null
+                    };
+                });
+
+                return this.res.status(200).json({
+                    status: 1,
+                    data: productsWithAttributes,
+                    currentPage: parseInt(page),
+                    totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+                    totalRecords: countResult[0].total
+                });
             });
-            return this.res.status(200).json({  data: productsWithAttributes, 
-              currentPage: page,
-              totalPages: Math.ceil(totalRecords / limit) });
-          }
         });
-      } catch (error) {
-        console.log("Error:", error);
-        return this.res.status(500).json({ error: 'Internal server error' });
-      }
-  }
+    } catch (error) {
+        console.error('Error in getProductLists:', error);
+        return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+    }
+}
 
 
 
   async getProductListByID() {
     try {
-      const data = this.req.params;
-      console.log(data);
-      const page = parseInt(data.page) || 1; // Default to page 1 if not provided
-const limit = parseInt(data.limit) || 10; // Default limit to 10 records per page if not provided
-const offset = (page - 1) * limit;
-      if (!data) {
-        return this.res.send({ status: 0, message: "Please send data" });
-      }
-      console.log(data);
-      let selectQuery;
-      if (data.catID) {
-      selectQuery = `
-      SELECT p.*, 
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('_id', s._id, 'subcategoryName', s.subcategoryName,'image', s.image)) AS subcategories
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN subcategories AS s ON p.subcategoryIds = s._id
-      WHERE s._id =${data.catID}
-      GROUP BY p._id;
-    `;
-  } else {
-    // Fetch products with pagination and search filtering
-    selectQuery = `
-      SELECT p.*, 
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('_id', s._id, 'subcategoryName', s.subcategoryName,'image', s.image)) AS subcategories
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN subcategories AS s ON p.subcategoryIds = s._id
-      WHERE p.name LIKE '%${data.search}%' OR p.sku LIKE '%${data.search}%'
-      GROUP BY p._id
-      LIMIT ${limit}
-      OFFSET ${offset};
-    `;
-  }
-        console.log(selectQuery);
-        connection.query(selectQuery, (err, result) => {
-          if (err) {
-            console.error('Error getting products with attributes:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const totalRecords = result.length;
-            const productsWithAttributes = result.map((data) => {
-              const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                subcategoryIds: JSON.parse(`${data.subcategories}`),
-                name: data.name,
-                _id: data._id,
-                minPurchaseQty: data.minPurchaseQty,
-                maxPurchaseQty: data.maxPurchaseQty,
-                sku: data.sku,
-                price: data.unitprice,
-                totalPrice: data.totalPrice,
-                otherTaxes: data.otherTaxes,
-                discount: data.discount,
-                stock: data.stock,
-                shippingDays: data.shippingDays,
-                returnAvailability: data.returnAvailability,
-                returnDays: data.returnDays,
-                replacementAvailability: data.replacementAvailability,
-                replacementDays: data.replacementDays,
-                refundAvailability: data.refundAvailability,
-                cancellationAvailability: data.cancellationAvailability,
-                cancellationCharges: data.cancellationCharges,
-                status: data.status,
-                bestSeller: data.bestSeller,
-                newArrival: data.newArrival,
-                featured: data.featured,
-                todaysDeal: data.todaysDeal,
-                festiveOffers: data.festiveOffers,
-                freeDelivery: data.freeDelivery,
-                freeDelivery: data.freeDelivery,
-                attributes: data.attributes,
-                gallaryImages: data.gallaryImages,
-                productImage: data.productImage,
-                description: data.description,
-                discountDate: data.discountDate,
-                discountType: data.discountType,
-                longDescription: data.longDescription,
-                metaDescription: data.metaDescription,
-                metaKeywords: data.metaKeywords,
-                metaTitle: data.metaTitle,
-                productVideoUrl: data.productVideoUrl,
-                refundAmount: data.refundAmount,
-                rating: data.rating,
-                reviewsCount: data.reviewsCount,
-                attributes: JSON.parse(`${data.productsattr}`),  
-              };
-              return product;
-            });
-            return this.res.status(200).json({  data: productsWithAttributes, 
-              currentPage: page,
-              totalPages: Math.ceil(totalRecords / limit) });
-          }
-        });
-      } catch (error) {
-        console.log("Error:", error);
-        return this.res.status(500).json({ error: 'Internal server error' });
-      }
-  }
-  async getProductListByDetail() {
-    try {
-      const data = this.req.params;
-      console.log(data);
-      if (!data) {
-        return this.res.send({ status: 0, message: "Please send data" });
-      }
-      console.log(data);
-      let selectQuery;
-      if (data.productId) {
-      selectQuery = `
-      SELECT p.*, 
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      WHERE p._id = ${data.productId}
-      GROUP BY p._id;
-    `;
-  } else {
-    // Fetch products with pagination and search filtering
-    selectQuery = `
-      SELECT p.*, 
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      WHERE p._id = ${data.productId}
-      GROUP BY p._id
-    `;
-  }
-        console.log(selectQuery);
-        connection.query(selectQuery, (err, result) => {
-          if (err) {
-            console.error('Error getting products with attributes:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const totalRecords = result.length;
-            const productsWithAttributes = result.map((data) => {
-              const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                name: data.name,
-                 _id: data._id,
-                minPurchaseQty: data.minPurchaseQty,
-                maxPurchaseQty: data.maxPurchaseQty,
-                sku: data.sku,
-                price: data.unitprice,
-                totalPrice: data.totalPrice,
-                otherTaxes: data.otherTaxes,
-                discount: data.discount,
-                stock: data.stock,
-                shippingDays: data.shippingDays,
-                returnAvailability: data.returnAvailability,
-                returnDays: data.returnDays,
-                replacementAvailability: data.replacementAvailability,
-                replacementDays: data.replacementDays,
-                refundAvailability: data.refundAvailability,
-                cancellationAvailability: data.cancellationAvailability,
-                cancellationCharges: data.cancellationCharges,
-                status: data.status,
-                bestSeller: data.bestSeller,
-                newArrival: data.newArrival,
-                featured: data.featured,
-                todaysDeal: data.todaysDeal,
-                festiveOffers: data.festiveOffers,
-                freeDelivery: data.freeDelivery,
-                freeDelivery: data.freeDelivery,
-                attributes: data.attributes,
-                gallaryImages: data.gallaryImages,
-                productImage: data.productImage,
-                description: data.description,
-                discountDate: data.discountDate,
-                discountType: data.discountType,
-                longDescription: data.longDescription,
-                metaDescription: data.metaDescription,
-                metaKeywords: data.metaKeywords,
-                metaTitle: data.metaTitle,
-                productVideoUrl: data.productVideoUrl,
-                refundAmount: data.refundAmount,
-                rating: data.rating,
-                reviewsCount: data.reviewsCount,
-                attributes: JSON.parse(`${data.productsattr}`),  
-              };
-              return product;
-            });
-            return this.res.status(200).json({  data: productsWithAttributes });
-          }
-        });
-      } catch (error) {
-        console.log("Error:", error);
-        return this.res.status(500).json({ error: 'Internal server error' });
-      }
-  }
+        const { catID } = this.req.params; // Extract catID from URL parameter
+        const { page = 1, limit = 10, search } = this.req.query; // Extract pagination and search from query
+        const offset = (parseInt(page) - 1) * parseInt(limit);
 
+        // Input validation
+        if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+            return this.res.status(400).json({ status: 0, message: "Invalid pagination parameters" });
+        }
+        if (catID && isNaN(catID)) {
+            return this.res.status(400).json({ status: 0, message: "Invalid category ID" });
+        }
+
+        // Prepare SQL query with parameterized queries
+        let selectQuery = `
+            SELECT p.*, 
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', a._id, 
+                        'name', a.attribute_name, 
+                        'price', a.price, 
+                        'type', a.attribute_value
+                    )
+                ) AS product_attributes,
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', c._id, 
+                        'categoryName', c.categoryName, 
+                        'image', c.image
+                    )
+                ) AS categories
+            FROM products AS p
+            LEFT JOIN product_attributes AS a ON p._id = a.product_id
+            LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
+        `;
+
+        const queryParams = [];
+        let whereClause = '';
+
+        if (catID) {
+            whereClause = `WHERE FIND_IN_SET(?, p.categoryIds)`;
+            queryParams.push(catID);
+        } else if (search) {
+            whereClause = `WHERE p.name LIKE ? OR p.sku LIKE ?`;
+            queryParams.push(`%${search}%`, `%${search}%`);
+        } else {
+            whereClause = `WHERE p.status = ?`;
+            queryParams.push(1);
+        }
+
+        selectQuery += `
+            ${whereClause}
+            GROUP BY p._id
+            LIMIT ?
+            OFFSET ?
+        `;
+        queryParams.push(parseInt(limit), parseInt(offset));
+
+        connection.query(selectQuery, queryParams, (err, result) => {
+            if (err) {
+                console.error('Error executing query:', err);
+                return this.res.status(500).json({ status: 0, message: 'Database query error' });
+            }
+
+            // Get total count for pagination
+            const countQuery = `
+                SELECT COUNT(DISTINCT p._id) as total
+                FROM products AS p
+                ${whereClause}
+            `;
+
+            connection.query(countQuery, queryParams.slice(0, queryParams.length - 2), (countErr, countResult) => {
+                if (countErr) {
+                    console.error('Error counting products:', countErr);
+                    return this.res.status(500).json({ status: 0, message: 'Database count error' });
+                }
+
+                const productsWithAttributes = result.map(data => {
+                    let parsedAttributes = [];
+                    let parsedCategories = [];
+                    let parsedGallaryImages = [];
+
+                    try {
+                        parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
+                    }
+
+                    try {
+                        parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing categories for product ${data._id}:`, parseErr);
+                    }
+
+                    try {
+                        parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
+                    } catch (parseErr) {
+                        console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
+                    }
+
+                    return {
+                        _id: data._id,
+                        categoryIds: parsedCategories,
+                        name: data.name,
+                        sku: data.sku,
+                        price: data.unitprice || 0,
+                        totalPrice: data.totalPrice || 0,
+                        minPurchaseQty: data.minPurchaseQty || 1,
+                        maxPurchaseQty: data.maxPurchaseQty || null,
+                        otherTaxes: data.otherTaxes || 0,
+                        discount: data.discount || 0,
+                        stock: data.stock || 0,
+                        shippingDays: data.shippingDays || 0,
+                        returnAvailability: data.returnAvailability || 0,
+                        returnDays: data.returnDays || 0,
+                        replacementAvailability: data.replacementAvailability || 0,
+                        replacementDays: data.replacementDays || 0,
+                        refundAvailability: data.refundAvailability || 0,
+                        cancellationAvailability: data.cancellationAvailability || 0,
+                        cancellationCharges: data.cancellationCharges || 0,
+                        status: data.status || 'inactive',
+                        bestSeller: data.bestSeller || 0,
+                        newArrival: data.newArrival || 0,
+                        featured: data.featured || 0,
+                        todaysDeal: data.todaysDeal || 0,
+                        festiveOffers: data.festiveOffers || 0,
+                        freeDelivery: data.freeDelivery || 0,
+                        attributes: parsedAttributes,
+                        gallaryImages: parsedGallaryImages,
+                        productImage: data.productImage || '',
+                        description: data.description || '',
+                        discountDate: data.discountDate || null,
+                        discountType: data.discountType || '',
+                        longDescription: data.longDescription || '',
+                        metaDescription: data.metaDescription || '',
+                        metaKeywords: data.metaKeywords || '',
+                        metaTitle: data.metaTitle || '',
+                        productVideoUrl: data.productVideoUrl || null,
+                        refundAmount: data.refundAmount || null,
+                        rating: data.rating || null,
+                        reviewsCount: data.reviewsCount || null
+                    };
+                });
+
+                return this.res.status(200).json({
+                    status: 1,
+                    data: productsWithAttributes,
+                    currentPage: parseInt(page),
+                    totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+                    totalRecords: countResult[0].total
+                });
+            });
+        });
+    } catch (error) {
+        console.error('Error in getProductListByID:', error);
+        return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+    }
+}
+
+
+
+
+async getProductListByDetail() {
+    try {
+        const { productId } = this.req.params;
+
+        // Input validation
+        if (!productId || isNaN(productId)) {
+            return this.res.status(400).json({ status: 0, message: "Invalid or missing productId" });
+        }
+
+        // Prepare SQL query with parameterized queries
+        const selectQuery = `
+            SELECT p.*, 
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', a._id, 
+                        'name', a.attribute_name, 
+                        'price', a.price, 
+                        'type', a.attribute_value
+                    )
+                ) AS product_attributes,
+                GROUP_CONCAT(
+                    DISTINCT JSON_OBJECT(
+                        '_id', c._id, 
+                        'categoryName', c.categoryName, 
+                        'image', c.image
+                    )
+                ) AS categories
+            FROM products AS p
+            LEFT JOIN product_attributes AS a ON p._id = a.product_id
+            LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
+            WHERE p._id = ?
+            GROUP BY p._id
+        `;
+
+        connection.query(selectQuery, [parseInt(productId)], (err, result) => {
+            if (err) {
+                console.error('Error executing query:', err);
+                return this.res.status(500).json({ status: 0, message: 'Database query error' });
+            }
+
+            if (result.length === 0) {
+                return this.res.status(404).json({ status: 0, message: 'Product not found' });
+            }
+
+            const data = result[0];
+            let parsedAttributes = [];
+            let parsedCategories = [];
+            let parsedGallaryImages = [];
+
+            try {
+                parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
+            } catch (parseErr) {
+                console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
+            }
+
+            try {
+                parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
+            } catch (parseErr) {
+                console.error(`Error parsing categories for product ${data._id}:`, parseErr);
+            }
+
+            try {
+                parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
+            } catch (parseErr) {
+                console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
+            }
+
+            const product = {
+                _id: data._id,
+                categoryIds: parsedCategories,
+                name: data.name,
+                sku: data.sku,
+                price: data.unitprice || 0,
+                totalPrice: data.totalPrice || 0,
+                minPurchaseQty: data.minPurchaseQty || 1,
+                maxPurchaseQty: data.maxPurchaseQty || null,
+                otherTaxes: data.otherTaxes || 0,
+                discount: data.discount || 0,
+                stock: data.stock || 0,
+                shippingDays: data.shippingDays || 0,
+                returnAvailability: data.returnAvailability || 0,
+                returnDays: data.returnDays || 0,
+                replacementAvailability: data.replacementAvailability || 0,
+                replacementDays: data.replacementDays || 0,
+                refundAvailability: data.refundAvailability || 0,
+                cancellationAvailability: data.cancellationAvailability || 0,
+                cancellationCharges: data.cancellationCharges || 0,
+                status: data.status || 'inactive',
+                bestSeller: data.bestSeller || 0,
+                newArrival: data.newArrival || 0,
+                featured: data.featured || 0,
+                todaysDeal: data.todaysDeal || 0,
+                festiveOffers: data.festiveOffers || 0,
+                freeDelivery: data.freeDelivery || 0,
+                attributes: parsedAttributes,
+                gallaryImages: parsedGallaryImages,
+                productImage: data.productImage || '',
+                description: data.description || '',
+                discountDate: data.discountDate || null,
+                discountType: data.discountType || '',
+                longDescription: data.longDescription || '',
+                metaDescription: data.metaDescription || '',
+                metaKeywords: data.metaKeywords || '',
+                metaTitle: data.metaTitle || '',
+                productVideoUrl: data.productVideoUrl || null,
+                refundAmount: data.refundAmount || null,
+                rating: data.rating || null,
+                reviewsCount: data.reviewsCount || null
+            };
+
+            return this.res.status(200).json({
+                status: 1,
+                data: product
+            });
+        });
+    } catch (error) {
+        console.error('Error in getProductListByDetail:', error);
+        return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+    }
+}
 
 
 
@@ -972,230 +1092,317 @@ async getFeatured() {
 
 
 async getTodayDeal() {
-    try {
-      const data = this.req.params;
-      
-      if (!data) {
-        return this.res.send({ status: 0, message: "Please send data" });
-      }
-      let selectQuery;
-      if (data) {
-      selectQuery = `
-      SELECT p.*, count(r.rating) as ratings,
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN reviews AS r ON p._id = r.productId
-      WHERE p.todaysDeal=1
-      GROUP BY p._id;
-    `;
-  } else {
-    // Fetch products with pagination and search filtering
-    selectQuery = `
-       SELECT p.*, count(r.rating) as ratings,
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN reviews AS r ON p._id = r.productId
-      WHERE p.todaysDeal=1
-      GROUP BY p._id;
-    `;
+   try {
+  const data = this.req.params;
+
+  // Validate input (optional, depending on your use case)
+  if (!data) {
+    return this.res.status(400).json({ status: 0, message: "Please send data" });
   }
-        // console.log(selectQuery);
-        connection.query(selectQuery, (err, result) => {
-          if (err) {
-            console.error('Error getting products with attributes:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const totalRecords = result.length;
-            const productsWithAttributes = result.map((data) => {
-              const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                 ratingsCount: JSON.parse(`${data.reviews}`),
-                name: data.name,
-                 _id: data._id,
-                minPurchaseQty: data.minPurchaseQty,
-                maxPurchaseQty: data.maxPurchaseQty,
-                sku: data.sku,
-                price: data.price,
-                totalPrice: data.totalPrice,
-                otherTaxes: data.otherTaxes,
-                discount: data.discount,
-                stock: data.stock,
-                shippingDays: data.shippingDays,
-                returnAvailability: data.returnAvailability,
-                returnDays: data.returnDays,
-                replacementAvailability: data.replacementAvailability,
-                replacementDays: data.replacementDays,
-                refundAvailability: data.refundAvailability,
-                cancellationAvailability: data.cancellationAvailability,
-                cancellationCharges: data.cancellationCharges,
-                status: data.status,
-                bestSeller: data.bestSeller,
-                newArrival: data.newArrival,
-                featured: data.featured,
-                todaysDeal: data.todaysDeal,
-                festiveOffers: data.festiveOffers,
-                freeDelivery: data.freeDelivery,
-                freeDelivery: data.freeDelivery,
-                attributes: data.attributes,
-                gallaryImages: data.gallaryImages,
-                productImage: data.productImage,
-                description: data.description,
-                discountDate: data.discountDate,
-                discountType: data.discountType,
-                longDescription: data.longDescription,
-                metaDescription: data.metaDescription,
-                metaKeywords: data.metaKeywords,
-                metaTitle: data.metaTitle,
-                productVideoUrl: data.productVideoUrl,
-                refundAmount: data.refundAmount,
-                rating: data.rating,
-                reviewsCount: data.reviewsCount,
-                attributes: JSON.parse(`${data.productsattr}`),  
-              };
-              return product;
-            });
-            return this.res.status(200).json({  data: productsWithAttributes});
-          }
+
+  // SQL query to fetch products and attributes
+  const selectQuery = `
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    LEFT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.todaysDeal = 1
+    UNION
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    RIGHT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.todaysDeal = 1 OR p.todaysDeal IS NULL;
+  `;
+
+  connection.query(selectQuery, (err, result) => {
+    if (err) {
+      console.error('Error getting products with attributes:', err);
+      return this.res.status(500).json({ error: 'Internal server error' });
+    }
+
+    // Group results by product _id to combine attributes
+    const productsMap = new Map();
+
+    result.forEach((row) => {
+      const productId = row._id;
+
+      // If product doesn't exist in map, initialize it
+      if (!productsMap.has(productId)) {
+        productsMap.set(productId, {
+          _id: row._id,
+          name: row.name,
+          minPurchaseQty: row.minPurchaseQty,
+          maxPurchaseQty: row.maxPurchaseQty,
+          sku: row.sku,
+          price: row.price,
+          totalPrice: row.totalPrice,
+          otherTaxes: row.otherTaxes,
+          discount: row.discount,
+          stock: row.stock,
+          shippingDays: row.shippingDays,
+          returnAvailability: row.returnAvailability,
+          returnDays: row.returnDays,
+          replacementAvailability: row.replacementAvailability,
+          replacementDays: row.replacementDays,
+          refundAvailability: row.refundAvailability,
+          cancellationAvailability: row.cancellationAvailability,
+          cancellationCharges: row.cancellationCharges,
+          status: row.status,
+          bestSeller: row.bestSeller,
+          newArrival: row.newArrival,
+          featured: row.featured,
+          todaysDeal: row.todaysDeal,
+          festiveOffers: row.festiveOffers,
+          freeDelivery: row.freeDelivery,
+          gallaryImages: row.gallaryImages,
+          productImage: row.productImage,
+          description: row.description,
+          discountDate: row.discountDate,
+          discountType: row.discountType,
+          longDescription: row.longDescription,
+          metaDescription: row.metaDescription,
+          metaKeywords: row.metaKeywords,
+          metaTitle: row.metaTitle,
+          productVideoUrl: row.productVideoUrl,
+          refundAmount: row.refundAmount,
+          attributes: [], // Initialize attributes array
         });
-      } catch (error) {
-        console.log("Error:", error);
-        return this.res.status(500).json({ error: 'Internal server error' });
       }
+
+      // Add attributes (color, size, etc.) if they exist
+      if (row.attribute_name && row.attribute_value) {
+        productsMap.get(productId).attributes.push({
+          name: row.attribute_name,
+          value: row.attribute_value,
+        });
+      }
+    });
+
+    // Convert Map to array for response
+    const productsWithAttributes = Array.from(productsMap.values());
+
+    return this.res.status(200).json({
+      status: 1,
+      totalRecords: productsWithAttributes.length,
+      data: productsWithAttributes,
+    });
+  });
+} catch (error) {
+  console.error("Error:", error);
+  return this.res.status(500).json({ error: 'Internal server error' });
+}
   }
+
+
+
+
+async getTodayNewArrival() {
+   try {
+  const data = this.req.params;
+
+  // Validate input (optional, depending on your use case)
+  if (!data) {
+    return this.res.status(400).json({ status: 0, message: "Please send data" });
+  }
+
+  // SQL query to fetch products and attributes
+  const selectQuery = `
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    LEFT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.newArrival = 1
+    UNION
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    RIGHT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.newArrival = 1 OR p.newArrival IS NULL;
+  `;
+
+  connection.query(selectQuery, (err, result) => {
+    if (err) {
+      console.error('Error getting products with attributes:', err);
+      return this.res.status(500).json({ error: 'Internal server error' });
+    }
+
+    // Group results by product _id to combine attributes
+    const productsMap = new Map();
+
+    result.forEach((row) => {
+      const productId = row._id;
+
+      // If product doesn't exist in map, initialize it
+      if (!productsMap.has(productId)) {
+        productsMap.set(productId, {
+          _id: row._id,
+          name: row.name,
+          minPurchaseQty: row.minPurchaseQty,
+          maxPurchaseQty: row.maxPurchaseQty,
+          sku: row.sku,
+          price: row.price,
+          totalPrice: row.totalPrice,
+          otherTaxes: row.otherTaxes,
+          discount: row.discount,
+          stock: row.stock,
+          shippingDays: row.shippingDays,
+          returnAvailability: row.returnAvailability,
+          returnDays: row.returnDays,
+          replacementAvailability: row.replacementAvailability,
+          replacementDays: row.replacementDays,
+          refundAvailability: row.refundAvailability,
+          cancellationAvailability: row.cancellationAvailability,
+          cancellationCharges: row.cancellationCharges,
+          status: row.status,
+          bestSeller: row.bestSeller,
+          newArrival: row.newArrival,
+          featured: row.featured,
+          todaysDeal: row.todaysDeal,
+          festiveOffers: row.festiveOffers,
+          freeDelivery: row.freeDelivery,
+          gallaryImages: row.gallaryImages,
+          productImage: row.productImage,
+          description: row.description,
+          discountDate: row.discountDate,
+          discountType: row.discountType,
+          longDescription: row.longDescription,
+          metaDescription: row.metaDescription,
+          metaKeywords: row.metaKeywords,
+          metaTitle: row.metaTitle,
+          productVideoUrl: row.productVideoUrl,
+          refundAmount: row.refundAmount,
+          attributes: [], // Initialize attributes array
+        });
+      }
+
+      // Add attributes (color, size, etc.) if they exist
+      if (row.attribute_name && row.attribute_value) {
+        productsMap.get(productId).attributes.push({
+          name: row.attribute_name,
+          value: row.attribute_value,
+        });
+      }
+    });
+
+    // Convert Map to array for response
+    const productsWithAttributes = Array.from(productsMap.values());
+
+    return this.res.status(200).json({
+      status: 1,
+      totalRecords: productsWithAttributes.length,
+      data: productsWithAttributes,
+    });
+  });
+} catch (error) {
+  console.error("Error:", error);
+  return this.res.status(500).json({ error: 'Internal server error' });
+}
+  }
+
 
 
   async getFastival() {
     try {
-      const data = this.req.params;
-      
-      if (!data) {
-        return this.res.send({ status: 0, message: "Please send data" });
-      }
-      let selectQuery;
-      if (data) {
-      selectQuery = `
-      SELECT p.*, count(r.rating) as ratings,
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN reviews AS r ON p._id = r.productId
-      WHERE p.festiveOffers=1
-      GROUP BY p._id;
-    `;
-  } else {
-    // Fetch products with pagination and search filtering
-    selectQuery = `
-      SELECT p.*, count(r.rating) as ratings,
-      GROUP_CONCAT(JSON_OBJECT('_id', a._id, 'name', a.name, 'price', a.price, 'type', a.type)) AS productsattr,
-      GROUP_CONCAT(JSON_OBJECT('_id', c._id, 'categoryName', c.categoryName,'image', c.image)) AS categories,
-      GROUP_CONCAT(JSON_OBJECT('rating', r.rating)) AS reviews
-      FROM products AS p
-      LEFT JOIN productsattr AS a ON p.attributes = a._id
-      LEFT JOIN categories AS c ON p.categoryIds = c._id
-      LEFT JOIN reviews AS r ON p._id = r.productId
-      WHERE p.festiveOffers=1
-      GROUP BY p._id;
-    `;
-  }
-        // console.log(selectQuery);
-        connection.query(selectQuery, (err, result) => {
-          if (err) {
-            console.error('Error getting products with attributes:', err);
-            return this.res.status(500).json({ error: 'Internal server error' });
-          } else {
-            const totalRecords = result.length;
-            const productsWithAttributes = result.map((data) => {
-              const product = {
-                categoryIds: JSON.parse(`${data.categories}`),
-                ratingsCount: JSON.parse(`${data.reviews}`),
-                name: data.name,
-                 _id: data._id,
-                minPurchaseQty: data.minPurchaseQty,
-                maxPurchaseQty: data.maxPurchaseQty,
-                sku: data.sku,
-                price: data.price,
-                totalPrice: data.totalPrice,
-                otherTaxes: data.otherTaxes,
-                discount: data.discount,
-                stock: data.stock,
-                shippingDays: data.shippingDays,
-                returnAvailability: data.returnAvailability,
-                returnDays: data.returnDays,
-                replacementAvailability: data.replacementAvailability,
-                replacementDays: data.replacementDays,
-                refundAvailability: data.refundAvailability,
-                cancellationAvailability: data.cancellationAvailability,
-                cancellationCharges: data.cancellationCharges,
-                status: data.status,
-                bestSeller: data.bestSeller,
-                newArrival: data.newArrival,
-                featured: data.featured,
-                todaysDeal: data.todaysDeal,
-                festiveOffers: data.festiveOffers,
-                freeDelivery: data.freeDelivery,
-                freeDelivery: data.freeDelivery,
-                attributes: data.attributes,
-                gallaryImages: data.gallaryImages,
-                productImage: data.productImage,
-                description: data.description,
-                discountDate: data.discountDate,
-                discountType: data.discountType,
-                longDescription: data.longDescription,
-                metaDescription: data.metaDescription,
-                metaKeywords: data.metaKeywords,
-                metaTitle: data.metaTitle,
-                productVideoUrl: data.productVideoUrl,
-                refundAmount: data.refundAmount,
-                rating: data.rating,
-                reviewsCount: data.reviewsCount,
-                attributes: JSON.parse(`${data.productsattr}`),  
-              };
-              return product;
-            });
-            return this.res.status(200).json({  data: productsWithAttributes});
-          }
-        });
-      } catch (error) {
-        console.log("Error:", error);
-        return this.res.status(500).json({ error: 'Internal server error' });
-      }
+  const data = this.req.params;
+
+  // Validate input (optional, depending on your use case)
+  if (!data) {
+    return this.res.status(400).json({ status: 0, message: "Please send data" });
   }
 
-  /********************************************************
-   Purpose: single and multiple change status
-  Parameter:
-  {
-      "productIds":["5ad5d198f657ca54cfe39ba0","5ad5da8ff657ca54cfe39ba3"],
-      "status":true,
-      "isAdmin": true
-  }
-  Return: JSON String
-  ********************************************************/
-  async changeStatusOfProducts() {
-    try {
-      const sellerId = this.req.user;
-      let msg = "Product status not updated";
-      const query = this.req.body.isAdmin ? { _id: { $in: this.req.body.productIds } } : { _id: { $in: this.req.body.productIds }, sellerId: ObjectID(sellerId) };
-      const updatedProducts = await Products.updateMany(query, { $set: { status: this.req.body.status } });
-      if (updatedProducts) {
-        msg = updatedProducts.modifiedCount ? updatedProducts.modifiedCount + " Product updated" : updatedProducts.matchedCount == 0 ? "Product not exists" : msg;
-      }
-      return this.res.send({ status: 1, message: msg });
-    } catch (error) {
-      console.log("error- ", error);
-      this.res.send({ status: 0, message: error });
+  // SQL query to fetch products and attributes
+  const selectQuery = `
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    LEFT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.festiveOffers = 1
+    UNION
+    SELECT p.*, pa.attribute_name, pa.attribute_value
+    FROM products p
+    RIGHT JOIN product_attributes pa
+    ON p._id = pa.product_id
+    WHERE p.festiveOffers = 1 OR p.festiveOffers IS NULL;
+  `;
+
+  connection.query(selectQuery, (err, result) => {
+    if (err) {
+      console.error('Error getting products with attributes:', err);
+      return this.res.status(500).json({ error: 'Internal server error' });
     }
+
+    // Group results by product _id to combine attributes
+    const productsMap = new Map();
+
+    result.forEach((row) => {
+      const productId = row._id;
+
+      // If product doesn't exist in map, initialize it
+      if (!productsMap.has(productId)) {
+        productsMap.set(productId, {
+          _id: row._id,
+          name: row.name,
+          minPurchaseQty: row.minPurchaseQty,
+          maxPurchaseQty: row.maxPurchaseQty,
+          sku: row.sku,
+          price: row.price,
+          totalPrice: row.totalPrice,
+          otherTaxes: row.otherTaxes,
+          discount: row.discount,
+          stock: row.stock,
+          shippingDays: row.shippingDays,
+          returnAvailability: row.returnAvailability,
+          returnDays: row.returnDays,
+          replacementAvailability: row.replacementAvailability,
+          replacementDays: row.replacementDays,
+          refundAvailability: row.refundAvailability,
+          cancellationAvailability: row.cancellationAvailability,
+          cancellationCharges: row.cancellationCharges,
+          status: row.status,
+          bestSeller: row.bestSeller,
+          newArrival: row.newArrival,
+          featured: row.featured,
+          todaysDeal: row.todaysDeal,
+          festiveOffers: row.festiveOffers,
+          freeDelivery: row.freeDelivery,
+          gallaryImages: row.gallaryImages,
+          productImage: row.productImage,
+          description: row.description,
+          discountDate: row.discountDate,
+          discountType: row.discountType,
+          longDescription: row.longDescription,
+          metaDescription: row.metaDescription,
+          metaKeywords: row.metaKeywords,
+          metaTitle: row.metaTitle,
+          productVideoUrl: row.productVideoUrl,
+          refundAmount: row.refundAmount,
+          attributes: [], // Initialize attributes array
+        });
+      }
+
+      // Add attributes (color, size, etc.) if they exist
+      if (row.attribute_name && row.attribute_value) {
+        productsMap.get(productId).attributes.push({
+          name: row.attribute_name,
+          value: row.attribute_value,
+        });
+      }
+    });
+
+    // Convert Map to array for response
+    const productsWithAttributes = Array.from(productsMap.values());
+
+    return this.res.status(200).json({
+      status: 1,
+      totalRecords: productsWithAttributes.length,
+      data: productsWithAttributes,
+    });
+  });
+} catch (error) {
+  console.error("Error:", error);
+  return this.res.status(500).json({ error: 'Internal server error' });
+}
   }
 
 

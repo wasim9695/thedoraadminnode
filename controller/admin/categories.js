@@ -96,10 +96,12 @@ class CategoriesController extends Controller {
               });
             });
           } else {
-            if (data.categoryName && !data.customUrl) {
+            if (data.categoryName && data.customUrl) {
               let name = data.categoryName;
-              let checkCategoryQuery = 'SELECT * FROM categories WHERE categoryName = ?';
-              connection.query(checkCategoryQuery, [name, data.categoryId], async (err, results) => {
+              console.log(name);
+              let checkCategoryQuery = 'SELECT * FROM categories WHERE _id = ?';
+              console.log(checkCategoryQuery);
+              connection.query(checkCategoryQuery, [name, data._id], async (err, results) => {
                 if (err) {
                   console.error('Error checking category:', err);
                   return this.res.send({ status: 0, message: 'Internal server error' });
@@ -116,22 +118,23 @@ class CategoriesController extends Controller {
                     return this.res.send({ status: 0, message: 'Internal server error' });
                   }
       
-                  let custom = '';
-                  let check = name.replace(/ /g, '-').replace(/[^\w-]+/g, '').replace(/\-\-+/g, '-');
-                  for (let i = 0; i < category.length; i++) {
-                    const customCategory = await checkCustomUrl(check);
-                    if (customCategory.length === 0) {
-                      break;
-                    } else {
-                      check = check + i;
-                    }
-                  }
+                  // let custom = '';
+                  // let check = name.replace(/ /g, '-').replace(/[^\w-]+/g, '').replace(/\-\-+/g, '-');
+                  // for (let i = 0; i < category.length; i++) {
+                  //   const customCategory = await checkCustomUrl(check);
+                  //   if (customCategory.length === 0) {
+                  //     break;
+                  //   } else {
+                  //     check = check + i;
+                  //   }
+                  // }
       
                   data.categoryName = name;
-                  data.customUrl = check;
+                  // data.customUrl = check;
       
                   const updateCategoryQuery = 'UPDATE categories SET categoryName = ?, customUrl = ? WHERE _id = ?';
-                  connection.query(updateCategoryQuery, [data.categoryName, data.customUrl, data.categoryId], (err, updatedCategory) => {
+                  console.log(updateCategoryQuery);
+                  connection.query(updateCategoryQuery, [data.categoryName, data.customUrl, data._id], (err, updatedCategory) => {
                     if (err) {
                       console.error('Error updating category:', err);
                       return this.res.send({ status: 0, message: 'Internal server error' });
@@ -181,7 +184,7 @@ class CategoriesController extends Controller {
           let msg = 'Category not deleted.';
       
           const deleteQuery = `UPDATE categories SET status = '0'  WHERE _id= ? `;
-          const categoryIds = model.categoryIds;
+          const categoryIds = model._id;
       
           connection.query(deleteQuery, [categoryIds], (err, result) => {
             if (err) {
@@ -324,6 +327,47 @@ class CategoriesController extends Controller {
         }
       }
       
+
+
+      async subcategoryList() {
+        try {
+          const skip = 0;
+          const limit = 20;
+          const data = this.req.body;
+          if (!data) {
+            return this.res.send({ status: 0, message: 'Please send category type' });
+          }
+      
+          let query = `SELECT * FROM subcategories WHERE status = 1`;
+          let queryParams = [data];
+      
+      
+          if (data.searchText) {
+            query += ' AND subcategoryName LIKE ?';
+            queryParams.push(`%${data.searchText}%`);
+          }
+      
+          if (data.filter) {
+            // Assuming the 'filter' property is a valid SQL condition string
+            query += ` AND ${data.filter}`;
+          }
+      
+          const selectQuery = `${query} ORDER BY createdAt DESC LIMIT 0, 10`;
+          queryParams.push(skip, limit);
+      
+          connection.query(selectQuery, queryParams, (err, results) => {
+            if (err) {
+              console.error('Error fetching categories:', err);
+              return this.res.send({ status: 0, message: 'Internal server error' });
+            }
+      
+            return this.res.send({ status: 1, message: 'Details are:', data: results });
+          });
+        } catch (error) {
+          console.error('Error:', error);
+          return this.res.send({ status: 0, message: 'Internal server error' });
+        }
+      }
 
     /********************************************************
       Purpose: categoryListing Based On Filter In Admin

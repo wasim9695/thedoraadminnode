@@ -29,11 +29,11 @@ class BannerController extends Controller {
     async addBnners() {
         try {
             const data = this.req.body;
-            connection.query('INSERT INTO banners (imageUrl, altText, pathUrl, heading) VALUES (?, ?, ?, ?)', 
-            [data.imageUrl, data.altText, data.pathUrl, data.heading], (err, results) => {
+            connection.query('INSERT INTO banners (imageUrl, altText, pathUrl, heading, subheading, categoriesId, typeImages) VALUES (?, ?, ?, ?,?,?,?)', 
+            [data.imageUrl, data.altText, data.pathUrl, data.heading, data.subheading, data.categoriesId, data.typeImages], (err, results) => {
                 if (err) {
                   console.error(err);
-                  return res.status(500).send('Error inserting banner image into the database.');
+                  return this.res.status(500).send('Error inserting banner image into the database.');
                 }
             
                 return this.res.send({ status: 1, message: 'Details are:', data: results });
@@ -46,7 +46,7 @@ class BannerController extends Controller {
 
     async getBanner() {
         try {
-            connection.query('Select * from banners where status = 1 and typeImages="banner"', (err, results) => {
+            connection.query('Select * from banners where status ="active" and typeImages="topBanner"', (err, results) => {
                 if (err) {
                   console.error(err);
                   return res.status(500).send('Error inserting banner image into the database.');
@@ -60,7 +60,7 @@ class BannerController extends Controller {
     }
     async getBannerLeftSideBanner() {
         try {
-            connection.query('Select * from banners where status = 1 and typeImages="leftBanner"', (err, results) => {
+            connection.query('Select * from banners where status ="active" and typeImages="leftBanner"', (err, results) => {
                 if (err) {
                   console.error(err);
                   return res.status(500).send('Error inserting banner image into the database.');
@@ -75,7 +75,7 @@ class BannerController extends Controller {
 
     async getBannerRightSideBanner() {
         try {
-            connection.query('Select * from banners where status = 1 and typeImages="rightBanner"', (err, results) => {
+            connection.query('Select * from banners where status ="active" and typeImages="rightBanner"', (err, results) => {
                 if (err) {
                   console.error(err);
                   return res.status(500).send('Error inserting banner image into the database.');
@@ -90,13 +90,98 @@ class BannerController extends Controller {
 
      async getBannerBottom() {
         try {
-            connection.query('Select * from banners where status = 1 and typeImages="bottomBanner"', (err, results) => {
+            connection.query('Select * from banners where status ="active" and typeImages="bottomBanner"', (err, results) => {
                 if (err) {
                   console.error(err);
                   return res.status(500).send('Error inserting banner image into the database.');
                 }
             
                 return this.res.send({ status: 1, message: 'Details are:', data: results });
+              });
+        } catch (error) {
+            return this.res.send({ status: 0, message: "Internal server error" });
+        }
+    }
+
+     async getBannerBottomTwo() {
+        try {
+            connection.query('Select * from banners where status = "active" and typeImages="bottomBannerTwo"', (err, results) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).send('Error inserting banner image into the database.');
+                }
+            
+                return this.res.send({ status: 1, message: 'Details are:', data: results });
+              });
+        } catch (error) {
+            return this.res.send({ status: 0, message: "Internal server error" });
+        }
+    }
+
+
+     async getBannerBottomThree() {
+        try {
+            connection.query('Select * from banners where status = "active" and typeImages="bottomBannerThree"', (err, results) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).send('Error inserting banner image into the database.');
+                }
+            
+                return this.res.send({ status: 1, message: 'Details are:', data: results });
+              });
+        } catch (error) {
+            return this.res.send({ status: 0, message: "Internal server error" });
+        }
+    }
+
+
+    async getFetauredProducts() {
+        try {
+            connection.query('Select * from banners where status = "active" and typeImages="featurebanner"', (err, results) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).send('Error inserting banner image into the database.');
+                }
+            
+                return this.res.send({ status: 1, message: 'Details are:', data: results });
+              });
+        } catch (error) {
+            return this.res.send({ status: 0, message: "Internal server error" });
+        }
+    }
+
+    async addZipCode() {
+        try {
+            const data = this.req.body;
+            connection.query('INSERT INTO zipcodes (code) VALUES (?)', 
+            [data.zipcode], (err, results) => {
+                if (err) {
+                  console.error(err);
+                  return this.res.status(500).send('Error inserting zipcode into the database.');
+                }
+            
+                return this.res.send({ status: 1, message: 'Details are:', data: results });
+              });
+        } catch (error) {
+            return this.res.send({ status: 0, message: "Internal server error" });
+        }
+    }
+     async getZipCode() {
+        try {
+            const data = this.req.body;
+            connection.query('SELECT * FROM zipcodes WHERE code = ?', 
+            [data.zipcode], (err, results) => {
+                if (err) {
+                  console.error(err);
+                  return this.res.status(500).send('Error inserting zipcode into the database.');
+                }
+            
+              if (results.length === 0) {
+      // this.res.status(404).json({ error: 'Invalid Zip Code' });
+                this.res.json({ message: 'Shipping Not Allowed' });
+    } else {
+      this.res.json({ message: 'Valid Zip Code' });
+    }
               });
         } catch (error) {
             return this.res.send({ status: 0, message: "Internal server error" });

@@ -17,5 +17,31 @@ module.exports = (router, app) => {
         const bannerObj = (new BannerController()).boot(req, res);
         return bannerObj.getBannerBottom();
     });
+     router.get('/common/bottombannertwo', (req, res, next) => {
+        const bannerObj = (new BannerController()).boot(req, res);
+        return bannerObj.getBannerBottomTwo();
+    });
+
+     router.get('/common/bottombannerthree', (req, res, next) => {
+        const bannerObj = (new BannerController()).boot(req, res);
+        return bannerObj.getBannerBottomThree();
+    });
+
+router.get('/common/getFetauredProducts', (req, res, next) => {
+        const bannerObj = (new BannerController()).boot(req, res);
+        return bannerObj.getFetauredProducts();
+    });
+
+
+
+     router.post('/common/zipcode', (req, res, next) => {
+        const bannerObj = (new BannerController()).boot(req, res);
+        return bannerObj.addZipCode();
+    });
+
+     router.post('/common/getzipcode', (req, res, next) => {
+        const bannerObj = (new BannerController()).boot(req, res);
+        return bannerObj.getZipCode();
+    });
   
 }

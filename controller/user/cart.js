@@ -29,6 +29,7 @@ const gstStages = [
         if (err) {
           reject(err);
         } else {
+          console.log(results[0]);
           resolve(results[0]);
         }
       });
@@ -51,6 +52,7 @@ const gstStages = [
   
   // Function to insert a new cart item
   async function insertCartItem(cartItem) {
+    console.log(cartItem);
     return new Promise((resolve, reject) => {
       const insertQuery = 'INSERT INTO cart SET ?';
       connection.query(insertQuery, cartItem, (err, results) => {
@@ -65,17 +67,20 @@ const gstStages = [
   
   // Function to update the cart item quantity
   async function updateCartItem(cartItem) {
+    console.log("cartItme2", cartItem);
     try {
       // Check if the cart item already exists
       const cartItemExists = await getCartItem(cartItem.userId, cartItem.productId);
       // If the cart item exists, update its quantity
       if (cartItemExists) {
+        console.log("cartexist", cartItemExists);
         // Get the existing quantity from the database
         // Calculate the new quantity by adding the existing quantity to the new quantity
-        const newQuantity = cartItemExists.quantity + cartItem.quantity;  
+        // const newQuantity = cartItemExists.quantity + cartItem.quantity;  
         return new Promise((resolve, reject) => {
           const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND productId = ?';
-          connection.query(updateQuery, [newQuantity, cartItem.userId, cartItem.productId], (err, results) => {
+          console.log(updateQuery);
+          connection.query(updateQuery, [cartItem.quantity, cartItem.userId, cartItem.productId], (err, results) => {
             if (err) {
               reject(err);
             } else {
@@ -229,53 +234,164 @@ class CartController extends Controller {
     Return: JSON String
     ********************************************************/
     async addToCart() {
-        try {
-            const userId = this.req.user;
-            const data = this.req.body;
-            const fieldsArray = ["productId", "quantity"]
-            const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
-            if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-                return this.res.send({ status: 0, message: "Please send" + " " + emptyFields.toString() + " fields required." });
-            }
-            const productDetails = await getProductDetails(data.productId);
+  try {
+    const userId = this.req.user; // Authenticated user ID
+    const { productId, quantity } = this.req.body;
 
+    // Validate required fields
+    const fieldsArray = ["productId", "quantity"];
+    const emptyFields = await this.requestBody.checkEmptyWithFields(this.req.body, fieldsArray);
+    if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
+      return this.res.status(400).send({
+        status: 0,
+        message: `Please send ${emptyFields.join(", ")} field(s) required.`,
+      });
+    }
+
+    // Validate quantity is a positive integer
+    const parsedQuantity = parseInt(quantity);
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+      return this.res.status(400).send({
+        status: 0,
+        message: "Quantity must be a positive integer.",
+      });
+    }
+
+    // Fetch product details
+    const productDetails = await getProductDetails(productId);
     if (!productDetails) {
-      return this.res.send({ status: 0, message: 'Product details not found' });
+      return this.res.status(404).send({
+        status: 0,
+        message: "Product not found.",
+      });
     }
-             // Prepare the cart item object
+    console.log(productDetails);
+
+    // Validate product status, stock, and purchase limits
+    if (productDetails.status !== "active") {
+      return this.res.status(400).send({
+        status: 0,
+        message: "Product is not available.",
+      });
+    }
+    if (productDetails.stock < parsedQuantity) {
+      return this.res.status(400).send({
+        status: 0,
+        message: "Insufficient stock.",
+      });
+    }
+    if (
+      parsedQuantity < productDetails.minPurchaseQty ||
+      parsedQuantity > productDetails.maxPurchaseQty
+    ) {
+      return this.res.status(400).send({
+        status: 0,
+        message: `Quantity must be between ${productDetails.minPurchaseQty} and ${productDetails.maxPurchaseQty}.`,
+      });
+    }
+    if (
+      productDetails.discountDate &&
+      new Date(productDetails.discountDate) < new Date()
+    ) {
+      // Reset discount if expired
+      productDetails.discount = 0;
+      productDetails.discountType = "percentage";
+    }
+
+    // Calculate total price based on discount type
+    console.log("hello",productDetails.unitprice);
+    const unitPrice = productDetails.unitprice;
+    console.log("321",unitPrice);
+    let totalPrice;
+    if (productDetails.discountType === "percentage") {
+      totalPrice = unitPrice * parsedQuantity * (1 - productDetails.discount / 100);
+    } else {
+      totalPrice = unitPrice * parsedQuantity - productDetails.discount;
+    }
+    // Ensure totalPrice is not negative
+    totalPrice = Math.max(0, parseFloat(totalPrice.toFixed(2)));
+
+    // Prepare cart item object
     const cartItem = {
-        userId,
-        productId:data.productId,
-        quantity: parseInt(data.quantity),
-      };
-  
-      // Check if the item already exists in the cart
-      const cartItemExists = await getCartItem(userId, data.productId);
-  
-      if (!cartItemExists) {
-        // If cart item doesn't exist, insert it into the cart table
-        await insertCartItem(cartItem);
-  
-        // Get cart total and quantity
-        const cartTotal = await getCartTotal(userId);
-        const cartQuantity = await getCartQuantity(userId);
-  
-        return this.res.send({ status: 1, message: 'Item added to cart successfully', data: { cartTotal, cartQuantity } });
-      } else {
-        // If cart item exists, update its quantity
-        await updateCartItem(cartItem);
-  
-        // Get cart total and quantity
-        const cartTotal = await getCartTotal(userId);
-        const cartQuantity = await getCartQuantity(userId);
-  
-        return this.res.send({ status: 1, message: 'Cart item quantity updated successfully', data: { cartTotal, cartQuantity } });
+      userId,
+      productId: parseInt(productId),
+      quantity: parsedQuantity,
+      unitPrice,
+      totalPrice,
+      discount: productDetails.discount || 0,
+      discountType: productDetails.discountType || "percentage",
+      otherTaxes: productDetails.otherTaxes || 0,
+    };
+    console.log("cartItem", userId);
+
+    // Check if the item already exists in the cart
+    const cartItemExists = await getCartItem(userId, productId);
+    console.log("cartItemExists", cartItemExists);
+
+    if (!cartItemExists) {
+      // Insert new cart item
+      await insertCartItem(cartItem);
+    } else {
+      // Update existing cart item (add to existing quantity)
+      const newQuantity = cartItemExists.quantity + parsedQuantity;
+      console.log("new qunatity", newQuantity);
+      if (newQuantity > productDetails.stock) {
+        return this.res.status(400).send({
+          status: 0,
+          message: "Total quantity exceeds available stock.",
+        });
       }
-    } catch (error) {
-      console.error('Error:', error);
-      return this.res.send({ status: 0, message: 'Internal server error' });
+      if (
+        newQuantity < productDetails.minPurchaseQty ||
+        newQuantity > productDetails.maxPurchaseQty
+      ) {
+        return this.res.status(400).send({
+          status: 0,
+          message: `Total quantity must be between ${productDetails.minPurchaseQty} and ${productDetails.maxPurchaseQty}.`,
+        });
+      }
+
+      // Recalculate totalPrice for updated quantity
+      let updatedTotalPrice;
+      if (productDetails.discountType === "percentage") {
+        updatedTotalPrice = unitPrice * newQuantity * (1 - productDetails.discount / 100);
+      } else {
+        updatedTotalPrice = unitPrice * newQuantity - productDetails.discount;
+      }
+      updatedTotalPrice = Math.max(0, parseFloat(updatedTotalPrice.toFixed(2)));
+
+      const updatedCartItem = {
+        ...cartItem,
+        quantity: newQuantity,
+        totalPrice: updatedTotalPrice,
+      };
+
+      console.log("updateItems", updatedCartItem);
+      await updateCartItem(updatedCartItem);
     }
-    }
+
+    // Get cart total and quantity
+    const cartTotal = await getCartTotal(userId);
+    const cartQuantity = await getCartQuantity(userId);
+
+    return this.res.status(200).send({
+      status: 1,
+      message: cartItemExists
+        ? "Cart item quantity updated successfully."
+        : "Item added to cart successfully.",
+      data: { cartTotal, cartQuantity },
+    });
+  } catch (error) {
+    console.error("Error in addToCart:", error);
+    return this.res.status(500).send({
+      status: 0,
+      message: "Internal server error.",
+    });
+  }
+}
+
+
+
 
 
 
@@ -537,41 +653,116 @@ class CartController extends Controller {
     Authorisation: true
     Return: JSON String
     ********************************************************/
-    async  getCartDetails() {
-        try {
-          const userId = this.req.user;      
-      
-          /****** getting cart Total *******/
-          const details = await this.getCartTotals(userId);
-          const cartDetails = details;
-      
-          if (_.isEmpty(cartDetails)) {
-            return this.res.send({ status: 0, message: "There is no data to display" });
-          }
-      
-          const cart = { cartDetails };
-          cart.cartTotal = details.cartValue;
-      
-          return this.res.send({ status: 1, message: "Listing details are: ", data: cart });
-        } catch (error) {
-          console.log("error", error);
-          return this.res.send({ status: 0, message: "Internal server error" });
-        }
+    async getCartDetails() {
+    try {
+      const userId = this.req.user; // Assuming user ID is set in req.user (e.g., via authentication middleware)
+
+      // Get cart details and totals
+      const cartDetails = await this.getCartTotals(userId);
+
+      if (_.isEmpty(cartDetails)) {
+        return this.res.status(200).json({
+          status: 0,
+          message: 'Your cart is empty',
+        });
       }
 
-    /**** Getting cart total ******/
-    async getCartTotals(userId) {
-        return new Promise((resolve, reject) => {
-            const selectQuery = "SELECT SUM(c.quantity) as totalQuantity, SUM(c.quantity * p.unitprice) as totalValue, COUNT(c.productId) as totalCart, GROUP_CONCAT(JSON_OBJECT('_id', p._id, 'productName', p.name, 'price', p.unitprice, 'image', p.productImage, 'quantity', c.quantity, 'car_id', c._id)) as cartItems FROM cart c JOIN products p ON c.productID = p._id WHERE c.userId = ? and c.status=0 GROUP BY c.userId";
-            connection.query(selectQuery, [userId], (err, results) => {
-              if (err) {
-                reject(err);
-              } else {
-                resolve(results);
-              }
-            });
-          });
+      // Format response to match frontend expectations
+      return this.res.status(200).json({
+        status: 1,
+        message: 'Listing details are: ',
+        data: {
+          cartDetails: [cartDetails], // Wrap in array for consistency with original response
+        },
+      });
+    } catch (error) {
+      console.error('Error in getCartDetails:', error);
+      return this.res.status(500).json({
+        status: 0,
+        message: 'Internal server error',
+        error: error.message,
+      });
     }
+  }
+
+  async getCartTotals(userId) {
+  return new Promise((resolve, reject) => {
+    // Query to fetch cart items, products, attributes, and aggregate totals
+    const selectQuery = `
+      SELECT 
+        SUM(c.quantity) AS totalQuantity,
+        SUM(c.quantity * p.unitprice) AS totalPrice,
+        COUNT(c._id) AS totalCartItems,
+        c._id AS cartId,
+        p._id AS productId,
+        p.name AS productName,
+        p.unitprice AS price,
+        p.productImage AS image,
+        p.gallaryImages AS gallaryImages,
+        c.quantity AS quantity,
+        pa.attribute_name,
+        pa.attribute_value
+      FROM cart c
+      JOIN products p ON c.productId = p._id
+      LEFT JOIN product_attributes pa ON p._id = pa.product_id
+      WHERE c.userId = ?
+      GROUP BY c._id, p._id, p.name, p.unitprice, p.productImage, p.gallaryImages, c.quantity, pa.attribute_name, pa.attribute_value
+    `;
+
+    connection.query(selectQuery, [userId], (err, results) => {
+      if (err) {
+        return reject(new Error(`Database query failed: ${err.message}`));
+      }
+
+      if (results.length === 0) {
+        return resolve({});
+      }
+
+      // Group results by cartId to combine attributes
+      const cartMap = new Map();
+
+      results.forEach((row) => {
+        const cartId = Number(row.cartId); // Ensure cartId is a number
+
+        // If cart item doesn't exist in map, initialize it
+        if (!cartMap.has(cartId)) {
+          cartMap.set(cartId, {
+            cartId: Number(row.cartId),
+            productId: Number(row.productId),
+            name: row.productName,
+            totalPrice: row.price,
+            productImage: row.image,
+            gallaryImages: row.gallaryImages ? JSON.parse(row.gallaryImages) : [], // Parse if stored as JSON string
+            quantity: row.quantity,
+            attributes: [], // Initialize attributes array
+          });
+        }
+
+        // Add attributes (color, size, etc.) if they exist
+        if (row.attribute_name && row.attribute_value) {
+          cartMap.get(cartId).attributes.push({
+            name: row.attribute_name,
+            value: row.attribute_value,
+          });
+        }
+      });
+
+      // Convert Map to array for cartItems
+      const cartItems = Array.from(cartMap.values());
+
+      // Format results into the expected structure
+      const cartDetails = {
+        totalQuantity: results[0].totalQuantity || 0,
+        totalPrice: results[0].totalPrice || 0,
+        totalCartItems: results[0].totalCartItems || 0,
+        cartItems,
+        cartTotalRows: cartItems.length,
+      };
+
+      resolve(cartDetails);
+    });
+  });
+}
     /****** getting cart Quantity of the particular product in the cart *******/
     async gettingCartQuantity(userId, type) {
         return new Promise(async (resolve, reject) => {

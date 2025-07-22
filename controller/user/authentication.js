@@ -9,6 +9,7 @@ const CommonService = require("../../utilities/common");
 const Model = require("../../utilities/model");
 const Services = require("../../utilities/index");
 const connection = require("../../config/db");
+const bcrypt = require('bcrypt');
 class UsersController extends Controller {
   constructor() {
     super();
@@ -19,124 +20,194 @@ class UsersController extends Controller {
   }
 
 
-  async signUp() {
-    try {
-      let fieldsArray = [
-        "fullName",
-        "emailId",
-        "mobileNo",
-        "password",
-        "termsAndConditions"
-      ];
-      let emptyFields = await this.requestBody.checkEmptyWithFields(this.req.body, fieldsArray);
-      
-      if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-        return this.res.send({
-          status: 0,
-          message: "Please send the following fields: " + emptyFields.toString() + "."
-        });
-      } else {
-        const query = 'INSERT INTO users SET ?';
-        const userData = this.req.body;
-      
-        // Check if the name or email already exists in the table
-        const duplicateCheckQuery = 'SELECT COUNT(*) AS count FROM users WHERE fullName = ? OR emailId = ?';
-        connection.query(duplicateCheckQuery, [userData.fullName, userData.emailId], (err, result) => {
-          if (err) {
-            console.error('Error adding item to cart:', err);
-            this.res.status(500).json({ error: 'Failed to add item to cart' });
-          } else {
-            const count = result[0].count;
-      
-            if (count > 0) {
-              this.res.status(400).json({ error: 'Name or email already exists' });
-            } else {
-              // Insert the data into the table
-              connection.query(query, userData, (err, result) => {
-                if (err) {
-                  console.error('Error adding item to cart:', err);
-                  this.res.status(500).json({ error: 'Failed to add item to cart' });
-                } else {
-                  return this.res.send({
-              status: 1, message: 'Item added to cart successfully' });
-                }
-              });
-            }
-          }
-        });
-      
+
+async signUp() {
+  try {
+    // Define required fields
+    let fieldsArray = [
+      "fullName",
+      "emailId",
+      "mobileNo",
+      "password",
+      "termsAndConditions"
+    ];
+
+    // Check for empty fields
+    let emptyFields = await this.requestBody.checkEmptyWithFields(this.req.body, fieldsArray);
+
+    if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
+      return this.res.status(400).send({
+        status: 0,
+        message: "Please provide the following fields: " + emptyFields.toString() + "."
+      });
+    }
+
+    const userData = this.req.body;
+
+    // Hash the password before storing it
+    const saltRounds = 10; // Number of salt rounds for bcrypt
+    const hashedPassword = await bcrypt.hash(userData.password, saltRounds);
+    userData.password = hashedPassword; // Replace plain text password with hashed password
+
+    // Check for duplicate users (fullName or emailId)
+    const duplicateCheckQuery = 'SELECT COUNT(*) AS count FROM users WHERE fullName = ? OR emailId = ?';
+    connection.query(duplicateCheckQuery, [userData.fullName, userData.emailId], (err, result) => {
+      if (err) {
+        console.error('Error checking for duplicate user:', err);
+        return this.res.status(500).json({ status: 0, message: 'Internal server error' });
       }
 
-    } catch (error) {
-      console.log("error = ", error);
-      return this.res.send({ status: 0, message: "Internal server error" });
-    }
+      const count = result[0].count;
+
+      if (count > 0) {
+        return this.res.status(400).json({ status: 0, message: 'Name or email already exists' });
+      }
+
+      // Insert the new user into the database
+      const insertQuery = 'INSERT INTO users SET ?';
+      connection.query(insertQuery, userData, (err, result) => {
+        if (err) {
+          console.error('Error creating user:', err);
+          return this.res.status(500).json({ status: 0, message: 'Failed to create user' });
+        }
+
+        return this.res.status(201).json({
+          status: 1,
+          message: 'User created successfully',
+          userId: result.insertId // Return the ID of the newly created user
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error('Error in signUp function:', error);
+    return this.res.status(500).json({ status: 0, message: 'Internal server error' });
   }
+}
 
 
   async signIn() {
-    try {
-      const data = this.req.body;
-      if (data.grantType == "password") {
-        const fieldsArray = ["username", "password"];
-        const emptyFields = await this.requestBody.checkEmptyWithFields(
-          data,
-          fieldsArray
-        );
-   
-      
-      if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-        return this.res.send({
-          status: 0,
-          message: "Please send the following fields: " + emptyFields.toString() + "."
-        });
-      } else {
-        const username = this.req.body.username;
-        const password = this.req.body.password;
-        
-        // Check if the email and password fields are not empty
-        if (!username || !password) {
-          return this.res.status(400).json({ error: "Please provide email and password." });
+  try {
+    const data = this.req.body;
+
+    // Check if the request is for password-based login or OTP-based login
+    if (data.username && data.password) {
+      // Password-based login (emailId/password OR mobileNo/password)
+      const { username, password } = data;
+
+      // Query to find user by emailId or mobileNo
+      const loginQuery = 'SELECT * FROM users WHERE (emailId = ? OR mobileNo = ?)';
+      connection.query(loginQuery, [username, username], async (err, results) => {
+        if (err) {
+          console.error('Error executing login query:', err);
+          return this.res.status(500).json({
+            status: 0,
+            message: "Internal server error"
+          });
         }
-        
-        // Query to check if the email and password match an existing user
-        const loginQuery = 'SELECT * FROM users WHERE emailId = ? OR mobileNo = ? AND password = ?';
-        connection.query(loginQuery, [username,username, password], async (err, results) => {
-          if (err) {
-            console.error('Error executing login query:', err);
-            return this.res.status(500).json({ error: 'Failed to perform login operation.' });
-          }
-        
-          if (results.length === 0) {
-            // If no user is found with the provided email and password, return an error
-            return this.res.send({status: 0,
-              message: "Invalid email or password"});
-          } else {
- console.log(results);
-            const { token, refreshToken } = await this.authentication.createToken({
-              id: results[0]._id,
-              action: "Login",
-            });
-            return this.res.send({
-              status: 1,
-              message: "Login Successful",
-              access_token: token,
-              refresh_token: refreshToken,
-              data: results[0],
-            });
-            // Successful login, return success message or user data as needed
-            // return this.res.status(200).json({ message: 'Login successful!', user: results[0] });
-          }
+
+        if (results.length === 0) {
+          return this.res.status(400).json({
+            status: 0,
+            message: "Invalid username or password"
+          });
+        }
+
+        const user = results[0];
+
+        // Verify password using bcrypt
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+          return this.res.status(400).json({
+            status: 0,
+            message: "Invalid username or password"
+          });
+        }
+
+        // Generate tokens
+        const { token, refreshToken } = await this.authentication.createToken({
+          id: user._id,
+          action: "Login",
         });
-      
-      }
+
+        return this.res.status(200).json({
+          status: 1,
+          message: "Login Successful",
+          access_token: token,
+          refresh_token: refreshToken,
+          data: user,
+        });
+      });
+    } else if (data.mobileNo && data.otp) {
+      // OTP-based login (mobileNo and OTP)
+      const { mobileNo, otp } = data;
+
+      // Query to find user by mobileNo
+      const otpQuery = 'SELECT * FROM users WHERE mobileNo = ? AND otp = ?';
+      connection.query(otpQuery, [mobileNo, otp], async (err, results) => {
+        if (err) {
+          console.error('Error executing OTP login query:', err);
+          return this.res.status(500).json({
+            status: 0,
+            message: "Internal server error"
+          });
+        }
+
+        if (results.length === 0) {
+          return this.res.status(400).json({
+            status: 0,
+            message: "Invalid mobile number or Otp"
+          });
+        }
+
+        const user = results[0];
+
+        // Validate OTP (replace with your OTP validation logic)
+        const isValidOTP = await this.validateOTP(mobileNo, otp); // Implement this function
+        if (!isValidOTP) {
+          return this.res.status(400).json({
+            status: 0,
+            message: "Invalid OTP"
+          });
+        }
+
+        // Generate tokens
+        const { token, refreshToken } = await this.authentication.createToken({
+          id: user._id,
+          action: "Login",
+        });
+
+        return this.res.status(200).json({
+          status: 1,
+          message: "Login Successful",
+          access_token: token,
+          refresh_token: refreshToken,
+          data: user,
+        });
+      });
+    } else {
+      // Invalid request
+      return this.res.status(400).json({
+        status: 0,
+        message: "Please provide either username/password or mobileNo/OTP."
+      });
     }
 
-    } catch (error) {
-      console.log("error = ", error);
-      return this.res.send({ status: 0, message: "Internal server error" });
-    }
+  } catch (error) {
+    console.error("Error in login function:", error);
+    return this.res.status(500).json({
+      status: 0,
+      message: "Internal server error"
+    });
   }
+}
+
+// Example OTP validation function (replace with your actual OTP validation logic)
+async validateOTP(mobileNo, otp) {
+  // Implement your OTP validation logic here
+  // For example, check if the OTP matches the one sent to the user's mobile number
+  return true; // Replace with actual validation
+}
 
   async getUserProfile(){
     try {
@@ -230,9 +301,9 @@ class UsersController extends Controller {
         user.emailId,
         "Salar",
         "",
-        `<html><body><h2>HI! ${user.name} you have requested for a password change</h2><h3><strong>New password: </strong>jjjj</h3></body></html>`
+        `<html><body><h2>HI! ${user.fullName} you have requested for a password change</h2><h3><strong>New password: </strong>jjjj</h3></body></html>`
       );
-      const message = `Dear ${user.name}, Welcome to www.salar.in Your User ID is ${user.registerId}, Your Password is uuuu, Regards Strawberri World Solutions Private Limited.";`;
+      const message = `Dear ${user.fullName}, Welcome to www.salar.in Your User ID is ${user._id}, Your Password is uuuu, Regards Strawberri World Solutions Private Limited.";`;
       // Sending message // Replace this with your email sending logic
   
                 this.res.status(200).json({ message: 'Password reset initiated. Please check your email for instructions.' });
@@ -248,23 +319,52 @@ class UsersController extends Controller {
 
   async userPassowrdChanage(){
 
-  const updatedProfile = this.req.body;
-  // Update the user's profile data in the database
-  // Replace 'users' with your actual table name
-  connection.query(
-    'UPDATE users SET password = ? WHERE _id = ?',
-    [updatedProfile.password, updatedProfile._id],
-    (err, result) => {
-      if (err) {
-        console.error('Error updating user profile:', err);
-        this.res.status(500).json({ error: 'Failed to update user profile' });
-      } else if (result.affectedRows === 0) {
-        this.res.status(404).json({ error: 'User not found' });
-      } else {
-        this.res.status(200).json({ message: 'User profile updated successfully' });
-      }
+ try {
+    const updatedProfile = this.req.body;
+
+    // Validate required fields
+    if (!updatedProfile.password || !updatedProfile._id) {
+      return this.res.status(400).json({
+        status: 0,
+        message: "Please provide both password and user ID."
+      });
     }
-  );
+
+    // Hash the new password before storing it
+    const saltRounds = 10; // Number of salt rounds for bcrypt
+    const hashedPassword = await bcrypt.hash(updatedProfile.password, saltRounds);
+
+    // Update the user's password in the database
+    const updateQuery = 'UPDATE users SET password = ? WHERE _id = ?';
+    connection.query(updateQuery, [hashedPassword, updatedProfile._id], (err, result) => {
+      if (err) {
+        console.error('Error updating user password:', err);
+        return this.res.status(500).json({
+          status: 0,
+          message: "Failed to update user password"
+        });
+      }
+
+      if (result.affectedRows === 0) {
+        return this.res.status(404).json({
+          status: 0,
+          message: "User not found"
+        });
+      }
+
+      return this.res.status(200).json({
+        status: 1,
+        message: "User password updated successfully"
+      });
+    });
+
+  } catch (error) {
+    console.error('Error in userPasswordChange function:', error);
+    return this.res.status(500).json({
+      status: 0,
+      message: "Internal server error"
+    });
+  }
   }
 
 async getUserAddresses(){
@@ -284,7 +384,7 @@ async getUserAddresses(){
   connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
     if (err) throw err;
     let existingAddresses ;
-    if(results===[]){
+    if(results==[]){
     existingAddresses = results[0].shippingAddresses || [];
     existingAddresses.push(newAddress);
     }else{

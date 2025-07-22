@@ -8,7 +8,7 @@ module.exports = (router, app) => {
     });
     router.get('/admin/getAtttributes', Authorization.isAdminAuthorised, (req, res, next) => {
         const attributeObj = (new AttributesController()).boot(req, res);
-        return attributeObj.getAttributeDetails();
+        return attributeObj.getProductsWithAttributes();
     });
 
     router.get('/admin/getAttributeDetails/:attributeId', Authorization.isAdminAuthorised, (req, res, next) => {
@@ -34,5 +34,9 @@ module.exports = (router, app) => {
     router.post('/admin/downloadAttributeFiles', Authorization.isAdminAuthorised, (req, res, next) => {
         const attributeObj = (new AttributesController()).boot(req, res);
         return attributeObj.downloadAttributeFiles();
+    });
+    router.get('/admin/getAttributeWithProducts', Authorization.isAdminAuthorised, (req, res, next) => {
+        const attributeObj = (new AttributesController()).boot(req, res);
+        return attributeObj.addAndUpdateAttribute();
     });
 }
