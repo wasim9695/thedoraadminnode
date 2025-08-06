@@ -773,7 +773,7 @@ async getProductListByDetail() {
 
             return this.res.status(200).json({
                 status: 1,
-                data: product
+                data: [product]
             });
         });
     } catch (error) {

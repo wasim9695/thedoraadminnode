@@ -37,10 +37,10 @@ const gstStages = [
   }
   
   // Function to check if the cart item already exists
-  async function  getCartItem(userId, productId) {
+  async function  getCartItem(userId, productId, attri_size, attri_color) {
     return new Promise((resolve, reject) => {
-      const selectQuery = 'SELECT * FROM cart WHERE userId = ? AND productId = ?';
-      connection.query(selectQuery, [userId, productId], (err, results) => {
+      const selectQuery = 'SELECT * FROM cart WHERE userId = ? AND productId = ? AND attri_size = ? AND attri_color = ?';
+      connection.query(selectQuery, [userId, productId, attri_size, attri_color], (err, results) => {
         if (err) {
           reject(err);
         } else {
@@ -52,7 +52,7 @@ const gstStages = [
   
   // Function to insert a new cart item
   async function insertCartItem(cartItem) {
-    console.log(cartItem);
+    console.log("insert", cartItem);
     return new Promise((resolve, reject) => {
       const insertQuery = 'INSERT INTO cart SET ?';
       connection.query(insertQuery, cartItem, (err, results) => {
@@ -70,7 +70,7 @@ const gstStages = [
     console.log("cartItme2", cartItem);
     try {
       // Check if the cart item already exists
-      const cartItemExists = await getCartItem(cartItem.userId, cartItem.productId);
+      const cartItemExists = await getCartItem(cartItem.userId, cartItem.productId, cartItem.attri_size, cartItem.attri_color);
       // If the cart item exists, update its quantity
       if (cartItemExists) {
         console.log("cartexist", cartItemExists);
@@ -78,9 +78,9 @@ const gstStages = [
         // Calculate the new quantity by adding the existing quantity to the new quantity
         // const newQuantity = cartItemExists.quantity + cartItem.quantity;  
         return new Promise((resolve, reject) => {
-          const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND productId = ?';
+          const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND productId = ? AND attri_size = ? AND attri_color= ? ';
           console.log(updateQuery);
-          connection.query(updateQuery, [cartItem.quantity, cartItem.userId, cartItem.productId], (err, results) => {
+          connection.query(updateQuery, [cartItem.quantity, cartItem.userId, cartItem.productId, cartItem.attri_size, cartItem.attri_color], (err, results) => {
             if (err) {
               reject(err);
             } else {
@@ -118,8 +118,9 @@ const gstStages = [
           connection.query(updateQuery, [cartItem.quantity, userId, cartItem.productId], (err, results) => {
             if (err) {
               reject(err);
+               console.log("result werea error ", err);
             } else {
-                // console.log(results);
+                console.log("result werea is ", results);
               resolve(results);
             }
           });
@@ -138,43 +139,45 @@ const gstStages = [
 
 
 
-  async function bulkUpdateCartItemSignle(cartItems, userId) {
-    try {
-      const updatePromises = [];
-      console.log(cartItems, userId);
-  
-      for (const cartItem of cartItems) {
-        // Check if the cart item already exists
-        // const cartItemExists = await getCartItem(cartItem.userId, cartItem.productId);
-  
-    //    console.log(cartItem, userId);
-  
-        // If the cart item exists, update its quantity
-        const updatePromise = new Promise((resolve, reject) => {
-          const updateQuery = 'UPDATE cart SET quantity = ? WHERE userId = ? AND _id = ?';
+ async function bulkUpdateCartItemSignle(cartItems, userId) {
+  try {
+    const updatePromises = [];
+    console.log("update process", cartItems, userId);
 
-        
-          connection.query(updateQuery, [cartItem.quantity, userId, cartItem._id], (err, results) => {
-            console.log(updateQuery);
+    for (const cartItem of cartItems) {
+      // For each item, create a Promise for updating that item
+      const updatePromise = new Promise((resolve, reject) => {
+        const updateQuery = `
+          UPDATE cart 
+          SET quantity = ? 
+          WHERE userId = ? AND _id = ? AND productId = ?
+        `;
+
+        // Use properties from the *current* cartItem object
+        connection.query(
+          updateQuery, 
+          [cartItem.quantity, userId, cartItem._id, cartItem.productId], 
+          (err, results) => {
             if (err) {
               reject(err);
             } else {
-                console.log(results);
               resolve(results);
             }
-          });
-        });
-  
-        updatePromises.push(updatePromise);
-      }
-  
-      // Wait for all update promises to resolve
-      const updateResults = await Promise.all(updatePromises);
-      return updateResults;
-    } catch (error) {
-      throw error;
+          }
+        );
+      });
+
+      updatePromises.push(updatePromise);
     }
+
+    // Wait for all update promises to resolve
+    const updateResults = await Promise.all(updatePromises);
+    return updateResults;
+  } catch (error) {
+    throw error;
   }
+}
+
   
   // Function to get the cart total
   async function getCartTotal(userId) {
@@ -236,8 +239,10 @@ class CartController extends Controller {
     async addToCart() {
   try {
     const userId = this.req.user; // Authenticated user ID
-    const { productId, quantity } = this.req.body;
+    const { productId, quantity, attri_size, attri_color } = this.req.body;
 
+console.log("body", this.req.body);
+   
     // Validate required fields
     const fieldsArray = ["productId", "quantity"];
     const emptyFields = await this.requestBody.checkEmptyWithFields(this.req.body, fieldsArray);
@@ -318,6 +323,8 @@ class CartController extends Controller {
       quantity: parsedQuantity,
       unitPrice,
       totalPrice,
+      attri_size: attri_size === undefined ? "Free Size" : attri_size,
+      attri_color: attri_color === undefined ? "Free Color" : attri_color,
       discount: productDetails.discount || 0,
       discountType: productDetails.discountType || "percentage",
       otherTaxes: productDetails.otherTaxes || 0,
@@ -325,7 +332,7 @@ class CartController extends Controller {
     console.log("cartItem", userId);
 
     // Check if the item already exists in the cart
-    const cartItemExists = await getCartItem(userId, productId);
+    const cartItemExists = await getCartItem(userId, productId, attri_size, attri_color);
     console.log("cartItemExists", cartItemExists);
 
     if (!cartItemExists) {
@@ -612,37 +619,46 @@ class CartController extends Controller {
     Return: JSON String
     ********************************************************/
 
-    async deleteCarts(userId, cartID) {
-        console.log(userId, cartID);
-        return new Promise((resolve, reject) => {
-          const selectQuery = 'DELETE FROM cart WHERE userId = ? and _id = ?';
-          connection.query(selectQuery, [userId, cartID], (err, results) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(results.length);
-            }
-          });
-        });
+   async deleteCarts(userId, cartID) {
+  console.log(userId, cartID);
+  return new Promise((resolve, reject) => {
+    const selectQuery = 'DELETE FROM cart WHERE userId = ? and _id = ?';
+    connection.query(selectQuery, [userId, cartID], (err, results) => {
+      if (err) {
+        reject(err);
+      } else {
+        // results.affectedRows: number of rows deleted
+        resolve(results.affectedRows);
       }
-    async deleteCartProducts() {
-        try {
-            const userId = this.req.user;
-            const data = this.req.body;
-            const fieldsArray = ["productId"];
-            const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
-            if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
-                return this.res.send({ status: 0, message: "Please send" + " " + emptyFields.toString() + " fields required." });
-            }
-                const deletionResult = await this.deleteCarts(userId, data.productId);
-                return { status: 1, message: deletionResult+ "Cart item removed successfully" };
-           
-           
-        } catch (error) {
-            console.log(`error: ${error}`)
-            return this.res.send({ status: 0, message: "Internal server error" });
-        }
+    });
+  });
+}
+  async deleteCartProducts() {
+  try {
+    const userId = this.req.user;
+    const data = this.req.body;
+    const fieldsArray = ["productId", "cartId"];
+    const emptyFields = await this.requestBody.checkEmptyWithFields(data, fieldsArray);
+    if (emptyFields && Array.isArray(emptyFields) && emptyFields.length) {
+      return this.res.send({
+        status: 0,
+        message: "Please send " + emptyFields.join(", ") + " fields required.",
+      });
     }
+    // Deleting via cartId is enough here
+    const deletedCount = await this.deleteCarts(userId, data.cartId);
+
+    if (deletedCount > 0) {
+      return this.res.send({ status: 1, message: "Cart item removed successfully" });
+    } else {
+      return this.res.send({ status: 0, message: "No matching cart item found for removal" });
+    }
+  } catch (error) {
+    console.log(`error: ${error}`)
+    return this.res.send({ status: 0, message: "Internal server error" });
+  }
+}
+
 
     /********************************************************
     Purpose: Getting Cart Details
@@ -696,6 +712,8 @@ class CartController extends Controller {
         c._id AS cartId,
         p._id AS productId,
         p.name AS productName,
+         c.attri_size AS sizes,
+          c.attri_color AS colors,
         p.unitprice AS price,
         p.productImage AS image,
         p.gallaryImages AS gallaryImages,
@@ -731,6 +749,8 @@ class CartController extends Controller {
             productId: Number(row.productId),
             name: row.productName,
             totalPrice: row.price,
+            sizename: row.sizes,
+            colorname: row.colors,
             productImage: row.image,
             gallaryImages: row.gallaryImages ? JSON.parse(row.gallaryImages) : [], // Parse if stored as JSON string
             quantity: row.quantity,
