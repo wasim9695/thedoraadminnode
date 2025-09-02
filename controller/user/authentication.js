@@ -367,58 +367,134 @@ async validateOTP(mobileNo, otp) {
   }
   }
 
-async getUserAddresses(){
-    const userId =  this.req.user;
-    const newAddress = this.req.body.address;
-  connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
-    if (err) throw err;
-    let existingAddresses ;
-     existingAddresses = JSON.parse(results[0].shippingAddresses || []);
-      this.res.status(200).json(existingAddresses);
-  });
+getUserAddresses(req, res) {
+  const userId = this.req.user; // Assuming user ID is available in req.user
+
+  // Validate input
+  if (!userId) {
+    return this.res.status(400).send('User ID is required');
   }
-  
-  async userAddresses(){
-    const userId =  this.req.user;
-    const newAddress = this.req.body.address;
+
+  // Query to get existing addresses
   connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
-    if (err) throw err;
-    let existingAddresses ;
-    if(results==[]){
-    existingAddresses = results[0].shippingAddresses || [];
-    existingAddresses.push(newAddress);
-    }else{
-      existingAddresses = JSON.parse(results[0].shippingAddresses || []);
-      existingAddresses.push(newAddress);
+    if (err) {
+      console.error('Database query error:', err);
+      return this.res.status(500).send('Internal server error');
     }
 
-    // Update the addresses in the database
-    connection.query('UPDATE users SET shippingAddresses = ? WHERE _id = ?', [JSON.stringify(existingAddresses), userId], (err) => {
-      if (err) throw err;
-      this.res.status(200).send('Address added successfully!');
-    });
+    let existingAddresses = [];
+
+    // Check if results exist and parse addresses
+    if (results.length > 0 && results[0].shippingAddresses) {
+      try {
+        existingAddresses = JSON.parse(results[0].shippingAddresses);
+        // Ensure existingAddresses is an array
+        if (!Array.isArray(existingAddresses)) {
+          existingAddresses = [];
+        }
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        existingAddresses = []; // Fallback to empty array if parsing fails
+      }
+    }
+
+    // Send the addresses as a JSON response
+    this.res.status(200).json(existingAddresses);
   });
+}
+  
+  userAddresses(req, res) {
+  const userId = this.req.user; // Assuming user ID is available in req.user
+  const newAddress = this.req.body.address;
+  console.log(userId, newAddress);
+
+  // Validate input
+  if (!userId || !newAddress) {
+    return this.res.status(400).send('User ID and address are required');
   }
 
-  async userAddressesUpdate(){
-    const userId =  this.req.user;
-    const addressId = this.req.params.addressId;
-  const updatedAddress = this.req.body.address;
-  // Retrieve the existing addresses of the user
+  // Query to get existing addresses
   connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId], (err, results) => {
-    if (err) throw err;
-    const existingAddresses = JSON.parse(results[0].shippingAddresses || []);
+    if (err) {
+      console.error('Database query error:', err);
+      return this.res.status(500).send('Internal server error');
+    }
 
-    // Update the specific address
-    existingAddresses[addressId] = updatedAddress;
+    let existingAddresses = [];
+
+    // Check if results exist and parse addresses
+    if (results.length > 0 && results[0].shippingAddresses) {
+      try {
+        existingAddresses = JSON.parse(results[0].shippingAddresses);
+        // Ensure existingAddresses is an array
+        if (!Array.isArray(existingAddresses)) {
+          existingAddresses = [];
+        }
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        existingAddresses = []; // Fallback to empty array if parsing fails
+      }
+    }
+
+    // Add new address to the array
+    existingAddresses.push(newAddress);
+
     // Update the addresses in the database
-    connection.query('UPDATE users SET shippingAddresses = ? WHERE _id = ?', [JSON.stringify(existingAddresses), userId], (err) => {
-      if (err) throw err;
-      this.res.status(200).send('Address updated successfully!');
-    });
+    connection.query(
+      'UPDATE users SET shippingAddresses = ? WHERE _id = ?',
+      [JSON.stringify(existingAddresses), userId],
+      (err) => {
+        if (err) {
+          console.error('Database update error:', err);
+          return this.res.status(500).send('Internal server error');
+        }
+        this.res.status(200).send('Address added successfully!');
+      }
+    );
   });
-  }
+}
 
+  async userAddressesUpdate(req, res) {
+  try {
+    const userId = req.user;
+    const addressId = req.params.addressId;
+    const updatedAddress = req.body.address;
+
+    if (!userId || !addressId || !updatedAddress) {
+      return this.res.status(400).send('User ID, address ID, and updated address are required');
+    }
+
+    const [results] = await connection.query('SELECT shippingAddresses FROM users WHERE _id = ?', [userId]);
+    let existingAddresses = [];
+    if (results.length > 0 && results[0].shippingAddresses) {
+      existingAddresses = JSON.parse(results[0].shippingAddresses);
+      if (!Array.isArray(existingAddresses)) {
+        existingAddresses = [];
+      }
+    }
+
+    const addressIndex = existingAddresses.findIndex((address) => address.addressId === addressId);
+    if (addressIndex === -1) {
+      return this.res.status(404).send('Address not found');
+    }
+
+    existingAddresses[addressIndex] = {
+      ...existingAddresses[addressIndex],
+      ...updatedAddress,
+      addressId
+    };
+
+    await connection.query('UPDATE users SET shippingAddresses = ? WHERE _id = ?', [
+      JSON.stringify(existingAddresses),
+      userId
+    ]);
+
+    this.res.status(200).send('Address updated successfully!');
+  } catch (error) {
+    console.error('Error updating address:', error);
+    this.res.status(500).send('Internal server error');
+  }
+}
 
 
 async userAddressesUpdateDefault () {
