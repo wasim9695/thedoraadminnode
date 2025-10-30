@@ -332,170 +332,361 @@ async addAndUpdateProduct() {
  Authorisation: true            
  Return: JSON String
  ********************************************************/
-  async getProductLists() {
-    try {
-        const { page = 1, limit = 10, search, minPrice, maxPrice } = this.req.query;
-        const offset = (parseInt(page) - 1) * parseInt(limit);
+//   async getProductLists() {
+//     try {
+//         const { page = 1, limit = 10, search, minPrice, maxPrice } = this.req.query;
+//         const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        // Input validation
-        if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
-            return this.res.status(400).json({ status: 0, message: "Invalid pagination parameters" });
-        }
+//         // Input validation
+//         if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+//             return this.res.status(400).json({ status: 0, message: "Invalid pagination parameters" });
+//         }
 
-        // Validate price filters if provided
-        if ((minPrice && isNaN(parseFloat(minPrice))) || (maxPrice && isNaN(parseFloat(maxPrice)))) {
-            return this.res.status(400).json({ status: 0, message: "Invalid price parameters" });
-        }
+//         // Validate price filters if provided
+//         if ((minPrice && isNaN(parseFloat(minPrice))) || (maxPrice && isNaN(parseFloat(maxPrice)))) {
+//             return this.res.status(400).json({ status: 0, message: "Invalid price parameters" });
+//         }
 
-        // Prepare SQL query with parameterized queries
-        let selectQuery = `
-            SELECT p.*, 
-                GROUP_CONCAT(
-                    DISTINCT JSON_OBJECT(
-                        '_id', a._id, 
-                        'name', a.attribute_name, 
-                        'price', a.price, 
-                        'type', a.attribute_value
-                    )
-                ) AS product_attributes,
-                GROUP_CONCAT(
-                    DISTINCT JSON_OBJECT(
-                        '_id', c._id, 
-                        'categoryName', c.categoryName, 
-                        'image', c.image
-                    )
-                ) AS categories
-            FROM products AS p
-            LEFT JOIN product_attributes AS a ON p._id = a.product_id
-            LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
-        `;
+//         // Prepare SQL query with parameterized queries
+//         let selectQuery = `
+//             SELECT p.*, 
+//                 GROUP_CONCAT(
+//                     DISTINCT JSON_OBJECT(
+//                         '_id', a._id, 
+//                         'name', a.attribute_name, 
+//                         'price', a.price, 
+//                         'type', a.attribute_value
+//                     )
+//                 ) AS product_attributes,
+//                 GROUP_CONCAT(
+//                     DISTINCT JSON_OBJECT(
+//                         '_id', c._id, 
+//                         'categoryName', c.categoryName, 
+//                         'image', c.image
+//                     )
+//                 ) AS categories
+//             FROM products AS p
+//             LEFT JOIN product_attributes AS a ON p._id = a.product_id
+//             LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
+//         `;
         
-        const queryParams = [];
-        let whereClause = '';
+//         const queryParams = [];
+//         let whereClause = '';
 
-        if (search) {
-            whereClause = `WHERE p.name LIKE ? OR p.sku LIKE ?`;
-            queryParams.push(`%${search}%`, `%${search}%`);
-        } else if (minPrice && maxPrice) {
-            whereClause = `WHERE p.totalPrice BETWEEN ? AND ?`;
-            queryParams.push(parseFloat(minPrice), parseFloat(maxPrice));
-        } else {
-            whereClause = `WHERE p.status = ?`;
-            queryParams.push(1);
-        }
+//         if (search) {
+//             whereClause = `WHERE p.name LIKE ? OR p.sku LIKE ?`;
+//             queryParams.push(`%${search}%`, `%${search}%`);
+//         } else if (minPrice && maxPrice) {
+//             whereClause = `WHERE p.totalPrice BETWEEN ? AND ?`;
+//             queryParams.push(parseFloat(minPrice), parseFloat(maxPrice));
+//         } else {
+//             whereClause = `WHERE p.status = ?`;
+//             queryParams.push(1);
+//         }
 
-        selectQuery += `
-            ${whereClause}
-            GROUP BY p._id
-            LIMIT ?
-            OFFSET ?
-        `;
-        queryParams.push(parseInt(limit), parseInt(offset));
+//         selectQuery += `
+//             ${whereClause}
+//             GROUP BY p._id
+//             LIMIT ?
+//             OFFSET ?
+//         `;
+//         queryParams.push(parseInt(limit), parseInt(offset));
 
-        connection.query(selectQuery, queryParams, (err, result) => {
-            if (err) {
-                console.error('Error executing query:', err);
-                return this.res.status(500).json({ status: 0, message: 'Database query error' });
-            }
+//         connection.query(selectQuery, queryParams, (err, result) => {
+//             if (err) {
+//                 console.error('Error executing query:', err);
+//                 return this.res.status(500).json({ status: 0, message: 'Database query error' });
+//             }
 
-            // Get total count for pagination
-            const countQuery = `
-                SELECT COUNT(DISTINCT p._id) as total
-                FROM products AS p
-                ${whereClause}
-            `;
+//             // Get total count for pagination
+//             const countQuery = `
+//                 SELECT COUNT(DISTINCT p._id) as total
+//                 FROM products AS p
+//                 ${whereClause}
+//             `;
             
-            connection.query(countQuery, queryParams.slice(0, queryParams.length - 2), (countErr, countResult) => {
-                if (countErr) {
-                    console.error('Error counting products:', countErr);
-                    return this.res.status(500).json({ status: 0, message: 'Database count error' });
-                }
+//             connection.query(countQuery, queryParams.slice(0, queryParams.length - 2), (countErr, countResult) => {
+//                 if (countErr) {
+//                     console.error('Error counting products:', countErr);
+//                     return this.res.status(500).json({ status: 0, message: 'Database count error' });
+//                 }
 
-                const productsWithAttributes = result.map(data => {
-                    let parsedAttributes = [];
-                    let parsedCategories = [];
-                    let parsedGallaryImages = [];
+//                 const productsWithAttributes = result.map(data => {
+//                     let parsedAttributes = [];
+//                     let parsedCategories = [];
+//                     let parsedGallaryImages = [];
 
-                    // Safely parse product_attributes
-                    try {
-                        parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
-                    } catch (parseErr) {
-                        console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
-                    }
+//                     // Safely parse product_attributes
+//                     try {
+//                         parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
+//                     } catch (parseErr) {
+//                         console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
+//                     }
 
-                    // Safely parse categories
-                    try {
-                        parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
-                    } catch (parseErr) {
-                        console.error(`Error parsing categories for product ${data._id}:`, parseErr);
-                    }
+//                     // Safely parse categories
+//                     try {
+//                         parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
+//                     } catch (parseErr) {
+//                         console.error(`Error parsing categories for product ${data._id}:`, parseErr);
+//                     }
 
-                    // Safely parse gallaryImages
-                    try {
-                        parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
-                    } catch (parseErr) {
-                        console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
-                    }
+//                     // Safely parse gallaryImages
+//                     try {
+//                         parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
+//                     } catch (parseErr) {
+//                         console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
+//                     }
 
-                    return {
-                        _id: data._id,
-                        categoryIds: parsedCategories,
-                        name: data.name,
-                        sku: data.sku,
-                        price: data.unitprice || 0,
-                        totalPrice: data.totalPrice || 0,
-                        minPurchaseQty: data.minPurchaseQty || 1,
-                        maxPurchaseQty: data.maxPurchaseQty || null,
-                        otherTaxes: data.otherTaxes || 0,
-                        discount: data.discount || 0,
-                        stock: data.stock || 0,
-                        shippingDays: data.shippingDays || 0,
-                        returnAvailability: data.returnAvailability || 0,
-                        returnDays: data.returnDays || 0,
-                        replacementAvailability: data.replacementAvailability || 0,
-                        replacementDays: data.replacementDays || 0,
-                        refundAvailability: data.refundAvailability || 0,
-                        cancellationAvailability: data.cancellationAvailability || 0,
-                        cancellationCharges: data.cancellationCharges || 0,
-                        status: data.status || 'inactive',
-                        bestSeller: data.bestSeller || 0,
-                        newArrival: data.newArrival || 0,
-                        featured: data.featured || 0,
-                        todaysDeal: data.todaysDeal || 0,
-                        festiveOffers: data.festiveOffers || 0,
-                        freeDelivery: data.freeDelivery || 0,
-                        attributes: parsedAttributes,
-                        gallaryImages: parsedGallaryImages,
-                        productImage: data.productImage || '',
-                        description: data.description || '',
-                        discountDate: data.discountDate || null,
-                        discountType: data.discountType || '',
-                        longDescription: data.longDescription || '',
-                        metaDescription: data.metaDescription || '',
-                        metaKeywords: data.metaKeywords || '',
-                        metaTitle: data.metaTitle || '',
-                        productVideoUrl: data.productVideoUrl || null,
-                        refundAmount: data.refundAmount || null,
-                        rating: data.rating || null,
-                        reviewsCount: data.reviewsCount || null
-                    };
-                });
+//                     return {
+//                         _id: data._id,
+//                         categoryIds: parsedCategories,
+//                         name: data.name,
+//                         sku: data.sku,
+//                         price: data.unitprice || 0,
+//                         totalPrice: data.totalPrice || 0,
+//                         minPurchaseQty: data.minPurchaseQty || 1,
+//                         maxPurchaseQty: data.maxPurchaseQty || null,
+//                         otherTaxes: data.otherTaxes || 0,
+//                         discount: data.discount || 0,
+//                         stock: data.stock || 0,
+//                         shippingDays: data.shippingDays || 0,
+//                         returnAvailability: data.returnAvailability || 0,
+//                         returnDays: data.returnDays || 0,
+//                         replacementAvailability: data.replacementAvailability || 0,
+//                         replacementDays: data.replacementDays || 0,
+//                         refundAvailability: data.refundAvailability || 0,
+//                         cancellationAvailability: data.cancellationAvailability || 0,
+//                         cancellationCharges: data.cancellationCharges || 0,
+//                         status: data.status || 'inactive',
+//                         bestSeller: data.bestSeller || 0,
+//                         newArrival: data.newArrival || 0,
+//                         featured: data.featured || 0,
+//                         todaysDeal: data.todaysDeal || 0,
+//                         festiveOffers: data.festiveOffers || 0,
+//                         freeDelivery: data.freeDelivery || 0,
+//                         attributes: parsedAttributes,
+//                         gallaryImages: parsedGallaryImages,
+//                         productImage: data.productImage || '',
+//                         description: data.description || '',
+//                         discountDate: data.discountDate || null,
+//                         discountType: data.discountType || '',
+//                         longDescription: data.longDescription || '',
+//                         metaDescription: data.metaDescription || '',
+//                         metaKeywords: data.metaKeywords || '',
+//                         metaTitle: data.metaTitle || '',
+//                         productVideoUrl: data.productVideoUrl || null,
+//                         refundAmount: data.refundAmount || null,
+//                         rating: data.rating || null,
+//                         reviewsCount: data.reviewsCount || null
+//                     };
+//                 });
 
-                return this.res.status(200).json({
-                    status: 1,
-                    data: productsWithAttributes,
-                    currentPage: parseInt(page),
-                    totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
-                    totalRecords: countResult[0].total
-                });
-            });
-        });
-    } catch (error) {
-        console.error('Error in getProductLists:', error);
-        return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+//                 return this.res.status(200).json({
+//                     status: 1,
+//                     data: productsWithAttributes,
+//                     currentPage: parseInt(page),
+//                     totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+//                     totalRecords: countResult[0].total
+//                 });
+//             });
+//         });
+//     } catch (error) {
+//         console.error('Error in getProductLists:', error);
+//         return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+//     }
+// }
+
+
+async getProductLists() {
+  try {
+    const { page = 1, limit = 10, search, minPrice, maxPrice } = this.req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    // Input validation
+    if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+      return this.res.status(400).json({ status: 0, message: "Invalid pagination parameters" });
     }
-}
+    // Validate price filters if provided
+    if ((minPrice && isNaN(parseFloat(minPrice))) || (maxPrice && isNaN(parseFloat(maxPrice)))) {
+      return this.res.status(400).json({ status: 0, message: "Invalid price parameters" });
+    }
+    // Prepare SQL query with parameterized queries
+    let selectQuery = `
+      SELECT 
+        p._id,
+        p.name,
+        p.sku,
+        p.unitprice,
+        p.totalPrice,
+        p.minPurchaseQty,
+        p.maxPurchaseQty,
+        p.otherTaxes,
+        p.discount,
+        p.stock,
+        p.shippingDays,
+        p.returnAvailability,
+        p.returnDays,
+        p.replacementAvailability,
+        p.replacementDays,
+        p.refundAvailability,
+        p.cancellationAvailability,
+        p.cancellationCharges,
+        p.status,
+        p.bestSeller,
+        p.newArrival,
+        p.featured,
+        p.todaysDeal,
+        p.festiveOffers,
+        p.freeDelivery,
+        p.gallaryImages,
+        p.productImage,
+        p.description,
+        p.discountDate,
+        p.discountType,
+        p.longDescription,
+        p.metaDescription,
+        p.metaKeywords,
+        p.metaTitle,
+        p.productVideoUrl,
+        p.refundAmount,
+        p.rating,
+        p.reviewsCount,
+        GROUP_CONCAT(
+          DISTINCT JSON_OBJECT(
+            '_id', a._id,
+            'name', a.attribute_name,
+            'price', a.price,
+            'type', a.attribute_value
+          )
+        ) AS product_attributes,
+        GROUP_CONCAT(
+          DISTINCT JSON_OBJECT(
+            '_id', c._id,
+            'categoryName', c.categoryName,
+            'image', c.image
+          )
+        ) AS categories
+      FROM products AS p
+      LEFT JOIN product_attributes AS a ON p._id = a.product_id
+      LEFT JOIN categories AS c ON FIND_IN_SET(c._id, p.categoryIds)
+    `;
+    // CHANGE: Explicitly list columns from p (omitting categoryIds, as it's unused in response)
+    // This ensures all are functionally dependent on GROUP BY p._id
 
+    const queryParams = [];
+    let whereClause = '';
+    if (search) {
+      whereClause = `WHERE p.name LIKE ? OR p.sku LIKE ?`;
+      queryParams.push(`%${search}%`, `%${search}%`);
+    } else if (minPrice && maxPrice) {
+      whereClause = `WHERE p.totalPrice BETWEEN ? AND ?`;
+      queryParams.push(parseFloat(minPrice), parseFloat(maxPrice));
+    } else {
+      whereClause = `WHERE p.status = ?`;
+      queryParams.push(1);
+    }
+    selectQuery += `
+      ${whereClause}
+      GROUP BY p._id
+      LIMIT ?
+      OFFSET ?
+    `;
+    queryParams.push(parseInt(limit), parseInt(offset));
+    connection.query(selectQuery, queryParams, (err, result) => {
+      if (err) {
+        console.error('Error executing query:', err);
+        return this.res.status(500).json({ status: 0, message: 'Database query error' });
+      }
+      // Get total count for pagination
+      const countQuery = `
+        SELECT COUNT(DISTINCT p._id) as total
+        FROM products AS p
+        ${whereClause}
+      `;
+      // CHANGE: Slice removes LIMIT/OFFSET params from countQuery
+      connection.query(countQuery, queryParams.slice(0, -2), (countErr, countResult) => {  // Fixed: was slice(0, queryParams.length - 2)
+        if (countErr) {
+          console.error('Error counting products:', countErr);
+          return this.res.status(500).json({ status: 0, message: 'Database count error' });
+        }
+        const productsWithAttributes = result.map(data => {
+          let parsedAttributes = [];
+          let parsedCategories = [];
+          let parsedGallaryImages = [];
+          // Safely parse product_attributes
+          try {
+            parsedAttributes = data.product_attributes ? JSON.parse(`[${data.product_attributes}]`) : [];
+          } catch (parseErr) {
+            console.error(`Error parsing product_attributes for product ${data._id}:`, parseErr);
+          }
+          // Safely parse categories
+          try {
+            parsedCategories = data.categories ? JSON.parse(`[${data.categories}]`) : [];
+          } catch (parseErr) {
+            console.error(`Error parsing categories for product ${data._id}:`, parseErr);
+          }
+          // Safely parse gallaryImages
+          try {
+            parsedGallaryImages = data.gallaryImages ? JSON.parse(data.gallaryImages) : [];
+          } catch (parseErr) {
+            console.error(`Error parsing gallaryImages for product ${data._id}:`, parseErr);
+          }
+          return {
+            _id: data._id,
+            categoryIds: parsedCategories,  // From parsed JSON, not p.categoryIds
+            name: data.name,
+            sku: data.sku,
+            price: data.unitprice || 0,
+            totalPrice: data.totalPrice || 0,
+            minPurchaseQty: data.minPurchaseQty || 1,
+            maxPurchaseQty: data.maxPurchaseQty || null,
+            otherTaxes: data.otherTaxes || 0,
+            discount: data.discount || 0,
+            stock: data.stock || 0,
+            shippingDays: data.shippingDays || 0,
+            returnAvailability: data.returnAvailability || 0,
+            returnDays: data.returnDays || 0,
+            replacementAvailability: data.replacementAvailability || 0,
+            replacementDays: data.replacementDays || 0,
+            refundAvailability: data.refundAvailability || 0,
+            cancellationAvailability: data.cancellationAvailability || 0,
+            cancellationCharges: data.cancellationCharges || 0,
+            status: data.status || 'inactive',
+            bestSeller: data.bestSeller || 0,
+            newArrival: data.newArrival || 0,
+            featured: data.featured || 0,
+            todaysDeal: data.todaysDeal || 0,
+            festiveOffers: data.festiveOffers || 0,
+            freeDelivery: data.freeDelivery || 0,
+            attributes: parsedAttributes,
+            gallaryImages: parsedGallaryImages,
+            productImage: data.productImage || '',
+            description: data.description || '',
+            discountDate: data.discountDate || null,
+            discountType: data.discountType || '',
+            longDescription: data.longDescription || '',
+            metaDescription: data.metaDescription || '',
+            metaKeywords: data.metaKeywords || '',
+            metaTitle: data.metaTitle || '',
+            productVideoUrl: data.productVideoUrl || null,
+            refundAmount: data.refundAmount || null,
+            rating: data.rating || null,
+            reviewsCount: data.reviewsCount || null
+          };
+        });
+        return this.res.status(200).json({
+          status: 1,
+          data: productsWithAttributes,
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+          totalRecords: countResult[0].total
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Error in getProductLists:', error);
+    return this.res.status(500).json({ status: 0, message: 'Internal server error' });
+  }
+}
 
 
   async getProductListByID() {
